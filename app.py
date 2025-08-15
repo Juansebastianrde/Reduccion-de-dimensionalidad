@@ -101,9 +101,20 @@ if "BNP" in bd.columns:
 st.header("Descripción de la base de datos")
 st.markdown(
 """
-Este conjunto de datos contiene registros de admisiones hospitalarias con variables demográficas, 
-detalles de admisión, antecedentes médicos, parámetros de laboratorio, condiciones clínicas y 
-resultado hospitalario. La variable objetivo usada en este proyecto es **DURATION OF STAY**.
+Este conjunto de datos corresponde a los registros de 14.845 admisiones hospitalarias (12.238 pacientes, incluyendo 1.921 con múltiples ingresos) recogidos 
+durante un período de dos años (1 de abril de 2017 a 31 de marzo de 2019) en el Hero DMC Heart Institute, unidad del Dayanand Medical College and Hospital 
+en Ludhiana, Punjab, India.
+La información incluye:
+Datos demográficos: edad, género y procedencia (rural o urbana).
+Detalles de admisión: tipo de admisión (emergencia u OPD), fechas de ingreso y alta, duración total de la estancia y duración en unidad de cuidados intensivos
+(columna objetivo en este proyecto).
+Antecedentes médicos: tabaquismo, consumo de alcohol, diabetes mellitus (DM), hipertensión (HTN), enfermedad arterial coronaria (CAD), cardiomiopatía previa (CMP),
+y enfermedad renal crónica (CKD).
+Parámetros de laboratorio: hemoglobina (HB), conteo total de leucocitos (TLC), plaquetas, glucosa, urea, creatinina, péptido natriurético cerebral (BNP), 
+enzimas cardíacas elevadas (RCE) y fracción de eyección (EF).
+Condiciones clínicas y comorbilidades: más de 28 variables como insuficiencia cardíaca, infarto con elevación del ST (STEMI), embolia pulmonar, shock, 
+infecciones respiratorias, entre otras.
+Resultado hospitalario: estado al alta (alta médica o fallecimiento).
 """
 )
 
@@ -201,7 +212,12 @@ st.header("3. División de datos y preprocesamiento")
 if "DURATION OF STAY" not in df.columns:
     st.error("No se encontró la columna objetivo 'DURATION OF STAY'. Revisa el nombre exacto en tu CSV.")
     st.stop()
-
+"""
+La variable elegida como objetivo es de tipo numérico continuo y representa el número de días, o fracción de días, que un paciente permanecerá en el hospital. 
+Su predicción tiene un alto valor clínico y operativo, ya que permite planificar con mayor precisión los recursos, la disponibilidad de camas y la asignación de 
+personal. Además, esta duración está influenciada por múltiples factores presentes en el conjunto de datos, como diagnósticos, comorbilidades y resultados 
+de laboratorio.
+"""
 X = df[num_features + cat_features].copy()
 y = df["DURATION OF STAY"]
 
@@ -375,6 +391,14 @@ if 'var_seleccionadas' in locals() and len(var_seleccionadas) > 0:
 else:
     SKIPPED.append("RandomForest → No hay variables de entrada (var_seleccionadas).")
 
+"""
+En primera instancia, se aplicaron métodos de filtrado utilizando la medida de correlación de Spearman y la prueba ANOVA, seleccionando en cada caso
+las variables con mayor relevancia estadística. Posteriormente, con el conjunto reducido obtenido de esta etapa, se implementaron tres métodos de 
+selección de características: SelectKBest, RFE y Random Forest. Finalmente, se identificaron las variables comunes entre SelectKBest y RFE, las cuales 
+fueron seleccionadas para conformar un nuevo dataframe con menor dimensionalidad, optimizando así la eficiencia del modelo sin comprometer su capacidad 
+predictiva.
+"""
+
 # === 9. PCA y MCA ===
 st.header("9. PCA y MCA")
 # a) PCA
@@ -455,4 +479,10 @@ else:
     for r in SKIPPED:
         st.write("• ", r)
 
-st.caption("Tip: Si faltan columnas esperadas, revisa los nombres exactos en el CSV y que el archivo esté en la raíz del repo.")
+"""
+
+Posteriormente, se realizaron análisis de componentes principales (PCA) y de correspondencias múltiples (MCA) con el fin de identificar patrones y 
+reducir la dimensionalidad de los datos. El MCA presentó una inercia por eje de 8.21%, 5.03%, 4.94%, 4.05% y 3.64%, mientras que el PCA retuvo 6 componentes
+que explicaron de forma acumulada el 74.8% de la varianza total. Los resultados obtenidos de ambos análisis se integraron en un nuevo *dataframe* para su 
+posterior uso en la modelación.
+"""
