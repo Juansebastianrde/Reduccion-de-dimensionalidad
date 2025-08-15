@@ -471,13 +471,7 @@ except ImportError:
 except Exception as e:
     SKIPPED.append(f"MCA → Error: {e}")
 
-# === Diagnóstico ===
-st.header("Diagnóstico — Secciones omitidas y razones")
-if len(SKIPPED) == 0:
-    st.success("No se omitieron secciones. Todo se ejecutó.")
-else:
-    for r in SKIPPED:
-        st.write("• ", r)
+
 
 """
 
