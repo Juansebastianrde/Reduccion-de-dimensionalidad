@@ -127,7 +127,13 @@ for col in ["SNO", "MRD No."]:
         df.drop(col, axis=1, inplace=True)
 if "month year" in df.columns:
     df.drop("month year", axis=1, inplace=True)
-
+"""
+Para iniciar el tratamiento de la base de datos, se realiza una revisión de las variables con el fin de identificar inconsistencias en su tipo de dato.
+En esta etapa, se detecta que algunas variables están clasificadas como categóricas (tipo texto), pero en realidad representan valores numéricos. 
+Por lo tanto, se procede a transformar dichas variables a formato numérico, asegurando su correcta interpretación en los análisis posteriores. 
+Este proceso es fundamental para evitar errores en cálculos estadísticos, garantizar la adecuada aplicación de modelos predictivos y facilitar la exploración 
+de relaciones entre variables.
+"""
 # 2.2 Fechas a datetime
 for date_col in ["D.O.A", "D.O.D"]:
     if date_col in df.columns:
@@ -235,6 +241,11 @@ X_train_processed = preprocessor.fit_transform(X_train)
 X_test_processed = preprocessor.transform(X_test)
 
 # === 4. Spearman ===
+"""
+Se realiza un análisis de correlación de Spearman entre las variables numéricas y la variable objetivo, con el fin de identificar el grado y la dirección 
+de la relación monotónica existente. Este procedimiento permite seleccionar aquellas variables que presentan una mayor asociación con la variable objetivo, 
+lo cual es útil para orientar el proceso de selección de características y mejorar el rendimiento de los modelos predictivos.
+"""
 st.header("4. Selección por filtrado: Spearman (numéricas)")
 if len(num_features) >= 2:
     X_train_num = X_train[num_features].copy()
@@ -273,6 +284,10 @@ else:
     SKIPPED.append("Spearman → Se necesitan al menos 2 variables numéricas.")
 
 # === 5. ANOVA (categóricas) ===
+"""
+Luego, para las variables categóricas, se aplica un análisis de varianza (ANOVA) con el objetivo de evaluar si existen diferencias estadísticamente 
+significativas en la variable objetivo según los niveles de cada categoría.
+"""
 st.header("5. Selección por filtrado: ANOVA (categóricas)")
 significativas = []
 if len(cat_features) > 0:
@@ -287,7 +302,15 @@ if len(cat_features) > 0:
     st.write(significativas if len(significativas) > 0 else "Ninguna con p<0.05")
 else:
     SKIPPED.append("ANOVA → No hay variables categóricas disponibles.")
-
+"""
+Una vez realizados estos análisis, se seleccionan las mejores variables de cada modelo (numéricas y categóricas). Con base en estas variables seleccionadas, 
+se aplican métodos automáticos de selección de características, tales como:
+•	KBest Selector
+•	RFE (Recursive Feature Elimination)
+•	Random Forest
+El objetivo final es reducir el conjunto de variables a aquellas que aporten mayor relevancia al modelo predictivo, mejorando así su desempeño y evitando 
+el sobreajuste.
+"""
 # === 6. SelectKBest ===
 st.header("6. SelectKBest (sobre variables filtradas)")
 var_seleccionadas = (numericas_significativas if 'numericas_significativas' in locals() else []) + significativas
