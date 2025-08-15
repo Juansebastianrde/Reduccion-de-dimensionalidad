@@ -215,15 +215,16 @@ else:
 
 # === 3. División y preprocesamiento ===
 st.header("3. División de datos y preprocesamiento")
-if "DURATION OF STAY" not in df.columns:
-    st.error("No se encontró la columna objetivo 'DURATION OF STAY'. Revisa el nombre exacto en tu CSV.")
-    st.stop()
 """
 La variable elegida como objetivo es de tipo numérico continuo y representa el número de días, o fracción de días, que un paciente permanecerá en el hospital. 
 Su predicción tiene un alto valor clínico y operativo, ya que permite planificar con mayor precisión los recursos, la disponibilidad de camas y la asignación de 
 personal. Además, esta duración está influenciada por múltiples factores presentes en el conjunto de datos, como diagnósticos, comorbilidades y resultados 
 de laboratorio.
 """
+if "DURATION OF STAY" not in df.columns:
+    st.error("No se encontró la columna objetivo 'DURATION OF STAY'. Revisa el nombre exacto en tu CSV.")
+    st.stop()
+
 X = df[num_features + cat_features].copy()
 y = df["DURATION OF STAY"]
 
@@ -241,12 +242,13 @@ X_train_processed = preprocessor.fit_transform(X_train)
 X_test_processed = preprocessor.transform(X_test)
 
 # === 4. Spearman ===
+
+st.header("4. Selección por filtrado: Spearman (numéricas)")
 """
 Se realiza un análisis de correlación de Spearman entre las variables numéricas y la variable objetivo, con el fin de identificar el grado y la dirección 
 de la relación monotónica existente. Este procedimiento permite seleccionar aquellas variables que presentan una mayor asociación con la variable objetivo, 
 lo cual es útil para orientar el proceso de selección de características y mejorar el rendimiento de los modelos predictivos.
 """
-st.header("4. Selección por filtrado: Spearman (numéricas)")
 if len(num_features) >= 2:
     X_train_num = X_train[num_features].copy()
     train_num_with_target = X_train_num.copy()
@@ -284,11 +286,12 @@ else:
     SKIPPED.append("Spearman → Se necesitan al menos 2 variables numéricas.")
 
 # === 5. ANOVA (categóricas) ===
+
+st.header("5. Selección por filtrado: ANOVA (categóricas)")
 """
 Luego, para las variables categóricas, se aplica un análisis de varianza (ANOVA) con el objetivo de evaluar si existen diferencias estadísticamente 
 significativas en la variable objetivo según los niveles de cada categoría.
 """
-st.header("5. Selección por filtrado: ANOVA (categóricas)")
 significativas = []
 if len(cat_features) > 0:
     for col in cat_features:
@@ -305,9 +308,9 @@ else:
 """
 Una vez realizados estos análisis, se seleccionan las mejores variables de cada modelo (numéricas y categóricas). Con base en estas variables seleccionadas, 
 se aplican métodos automáticos de selección de características, tales como:
-•	KBest Selector
-•	RFE (Recursive Feature Elimination)
-•	Random Forest
+•	KBest Selector.
+•	RFE (Recursive Feature Elimination).
+•	Random Forest.
 El objetivo final es reducir el conjunto de variables a aquellas que aporten mayor relevancia al modelo predictivo, mejorando así su desempeño y evitando 
 el sobreajuste.
 """
