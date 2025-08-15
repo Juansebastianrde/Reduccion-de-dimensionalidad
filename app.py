@@ -228,7 +228,7 @@ if len(num_features) >= 2:
     correlaciones_ordenadas = correlaciones.reindex(correlaciones.abs().sort_values(ascending=False).index)
 
     st.write("**Correlaciones (Spearman) ordenadas:**")
-    st.code("\n".join([f\"{col}: {val:.4f}\" for col, val in correlaciones_ordenadas.items()]), language="text")
+    st.code("\n".join([f"{col}: {val:.4f}" for col, val in correlaciones_ordenadas.items()]), language="text")
 
     df_corr = correlaciones_ordenadas.drop("DURATION OF STAY").to_frame(name="correlation")
     df_corr["abs_corr"] = df_corr["correlation"].abs()
