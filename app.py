@@ -93,14 +93,6 @@ except Exception as e:
     st.error(str(e))
     st.stop()
 
-# Intentar eliminar columna BNP si existe (como en tu notebook)
-if "BNP" in bd.columns:
-    bd.drop("BNP", axis=1, inplace=True)
-
-
-for col, values in filters.items():
-    if values:
-        df = df[df[col].isin(values)]
 
 # Mostrar advertencia si el dataframe está vacío
 if df.empty:
