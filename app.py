@@ -97,22 +97,6 @@ except Exception as e:
 if "BNP" in bd.columns:
     bd.drop("BNP", axis=1, inplace=True)
 
-# Filtros
-with st.sidebar:
-    st.header("Filtros")
-    #year_filter = st.multiselect("Años", sorted(df["Year"].dropna().unique()), default=None)
-sex_filter = st.multiselect(
-    "Sexo", 
-    sorted(df["GENDER"].dropna().unique()), 
-    default=["M"]
-)
-
-# Aplicar filtros
-filters = {
-    #"Year": year_filter,
-    "Sex": sex_filter
-}
-
 
 for col, values in filters.items():
     if values:
