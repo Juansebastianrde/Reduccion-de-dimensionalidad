@@ -103,8 +103,8 @@ with st.sidebar:
     #year_filter = st.multiselect("Años", sorted(df["Year"].dropna().unique()), default=None)
 sex_filter = st.multiselect(
     "Sexo", 
-    sorted(df["Sex"].dropna().unique()), 
-    default=["Male"]
+    sorted(df["Gender"].dropna().unique()), 
+    default=["M"]
 )
 
 # Aplicar filtros
