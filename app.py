@@ -312,6 +312,7 @@ se aplican métodos automáticos de selección de características, tales como:
 - KBest Selector.
 - RFE (Recursive Feature Elimination).
 - Random Forest.
+
 El objetivo final es reducir el conjunto de variables a aquellas que aporten mayor relevancia al modelo predictivo, mejorando así su desempeño y evitando 
 el sobreajuste.
 """
