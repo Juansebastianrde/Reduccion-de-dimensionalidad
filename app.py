@@ -94,10 +94,6 @@ except Exception as e:
     st.stop()
 
 
-# Mostrar advertencia si el dataframe está vacío
-if df.empty:
-    st.warning("No hay datos que coincidan con los filtros seleccionados.")
-    st.stop()
 
 # Validación de clases en variable objetivo
 if df["Condition"].nunique() <= 1:
