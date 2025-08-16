@@ -190,7 +190,9 @@ cat_features = [
     'PULMONARY EMBOLISM'
 ]
 cat_features = [c for c in cat_features if c in df.columns]
-num_features = [col for col in df.columns if col not in cat_features and col not in ["D.O.A","D.O.D"]]
+# num_features solo con columnas realmente numéricas y sin la variable objetivo
+num_features = [col for col in df.select_dtypes(include=[np.number]).columns
+                if col not in cat_features and col not in ["D.O.A", "D.O.D", "DURATION OF STAY"]]
 
 if len(cat_features) == 0:
     SKIPPED.append("Categóricas → Ninguna de las columnas esperadas está disponible.")
