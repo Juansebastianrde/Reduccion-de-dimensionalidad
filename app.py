@@ -427,6 +427,13 @@ predictiva.
 
 # === 9. PCA y MCA ===
 st.header("9. PCA y MCA")
+
+"""
+Posteriormente, se realizaron análisis de componentes principales (PCA) y de correspondencias múltiples (MCA) con el fin de identificar patrones y 
+reducir la dimensionalidad de los datos. El MCA presentó una inercia por eje de 8.21%, 5.03%, 4.94%, 4.05% y 3.64%, mientras que el PCA retuvo 6 componentes
+que explicaron de forma acumulada el 74.8% de la varianza total. Los resultados obtenidos de ambos análisis se integraron en un nuevo *dataframe* para su 
+posterior uso en la modelación.
+"""
 # a) PCA
 if len(num_features) > 0:
     try:
@@ -499,10 +506,4 @@ except Exception as e:
 
 
 
-"""
 
-Posteriormente, se realizaron análisis de componentes principales (PCA) y de correspondencias múltiples (MCA) con el fin de identificar patrones y 
-reducir la dimensionalidad de los datos. El MCA presentó una inercia por eje de 8.21%, 5.03%, 4.94%, 4.05% y 3.64%, mientras que el PCA retuvo 6 componentes
-que explicaron de forma acumulada el 74.8% de la varianza total. Los resultados obtenidos de ambos análisis se integraron en un nuevo *dataframe* para su 
-posterior uso en la modelación.
-"""
