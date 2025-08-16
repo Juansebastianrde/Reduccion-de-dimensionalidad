@@ -101,7 +101,11 @@ if "BNP" in bd.columns:
 with st.sidebar:
     st.header("Filtros")
     #year_filter = st.multiselect("Años", sorted(df["Year"].dropna().unique()), default=None)
-    sex_filter = st.multiselect("Sexo", sorted(df["Sex"].dropna().unique()), default=None)
+    sex_filter = st.multiselect(
+    "Sexo", 
+    sorted(df["Sex"].dropna().unique()), 
+    default=[]
+)
 
 # Aplicar filtros
 filters = {
