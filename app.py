@@ -97,6 +97,32 @@ except Exception as e:
 if "BNP" in bd.columns:
     bd.drop("BNP", axis=1, inplace=True)
 
+# Filtros
+with st.sidebar:
+    st.header("Filtros")
+    #year_filter = st.multiselect("Años", sorted(df["Year"].dropna().unique()), default=None)
+    sex_filter = st.multiselect("Sexo", sorted(df["Sex"].dropna().unique()), default=None)
+
+# Aplicar filtros
+filters = {
+    #"Year": year_filter,
+    "Sex": sex_filter
+}
+
+for col, values in filters.items():
+    if values:
+        df = df[df[col].isin(values)]
+
+# Mostrar advertencia si el dataframe está vacío
+if df.empty:
+    st.warning("No hay datos que coincidan con los filtros seleccionados.")
+    st.stop()
+
+# Validación de clases en variable objetivo
+if df["Condition"].nunique() <= 1:
+    st.warning("Los filtros seleccionados resultan en una sola clase en la variable objetivo. Se requieren al menos dos para PCA y resampling.")
+    st.stop()
+
 # === Descripción de la base de datos (markdown del notebook) ===
 st.header("Descripción de la base de datos")
 st.markdown(
