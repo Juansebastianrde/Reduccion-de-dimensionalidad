@@ -2,8 +2,14 @@ streamlit
 pandas
 numpy
 matplotlib
+plotly
 scikit-learn
 scipy
 prince
 nbformat
-plotly
+statsmodels
+openpyxl
+pyarrow
+joblib
+imbalanced-learn
+category-encoders
