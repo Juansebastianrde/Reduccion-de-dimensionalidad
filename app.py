@@ -158,3 +158,5 @@ st.success(f"Datos cargados: {bd.shape}")
 
 # Equivalente a bd.head()
 st.dataframe(bd.head(5), use_container_width=True)
+
+
