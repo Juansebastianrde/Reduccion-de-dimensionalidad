@@ -80,6 +80,35 @@ def patch_show_functions(ns):
             ns['pio'].show = _plotly_show
         except Exception:
             pass
+# --- STUB para google.colab en entornos sin Colab ---
+import sys, types
+
+def install_colab_stubs():
+    """Crea módulos falsos 'google' y 'google.colab' para que las celdas con imports de Colab no fallen."""
+    if 'google.colab' in sys.modules:
+        return  # ya existe
+
+    google_mod = types.ModuleType("google")
+    colab_mod = types.ModuleType("google.colab")
+
+    # Submódulos/atributos usados comúnmente en notebooks de Colab:
+    colab_mod.drive = types.SimpleNamespace(
+        mount=lambda *args, **kwargs: None
+    )
+    colab_mod.files = types.SimpleNamespace(
+        upload=lambda *args, **kwargs: None
+    )
+    colab_mod.output = types.SimpleNamespace(
+        clear=lambda *args, **kwargs: None
+    )
+    colab_mod.auth = types.SimpleNamespace(
+        authenticate_user=lambda *args, **kwargs: None
+    )
+
+    # Registrar en sys.modules para que "from google.colab import drive" funcione
+    google_mod.colab = colab_mod
+    sys.modules['google'] = google_mod
+    sys.modules['google.colab'] = colab_mod
 
 
 st.set_page_config(page_title="HDHI — Public App (GitHub RAW)", layout="wide")
@@ -288,6 +317,12 @@ elif page == "Análisis":
         "df": df_base.copy(), "bd": df_base.copy(), "data": df_base.copy(), "dataset": df_base.copy(),
         "io": io,
     }
+
+    
+    install_colab_stubs()        # ← AQUI, ANTES DEL PATCH
+    patch_show_functions(ns)     # luego el patch de plt/plotly
+
+    
     patch_show_functions(ns)
 
     nb = nbformat.read(NOTEBOOK_PATH, as_version=4)
