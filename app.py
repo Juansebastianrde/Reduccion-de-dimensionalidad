@@ -150,3 +150,11 @@ import pandas as pd
 url = "https://raw.githubusercontent.com/Juansebastianrde/Reduccion-de-dimensionalidad/main/HDHI%20Admission%20data.csv"
 df = pd.read_csv(url, sep=None, engine="python")  # infiere el separador
 
+st.header("1. Cargar base de datos")
+
+# Lee el CSV desde el archivo local (misma carpeta que la app)
+bd = pd.read_csv("HDHI Admission data.csv", sep=None, engine="python")  # infiere el separador
+st.success(f"Datos cargados: {bd.shape}")
+
+# Equivalente a bd.head()
+st.dataframe(bd.head(5), use_container_width=True)
