@@ -33,6 +33,55 @@ except Exception:
 
 import nbformat
 
+def clean_code(src: str) -> str:
+    """
+    Limpia magics de Notebook y comandos de shell para que no fallen en Streamlit.
+    """
+    if src is None:
+        return ""
+    lines = []
+    for ln in src.splitlines():
+        s = ln.strip()
+        if s.startswith("%") or s.startswith("%%") or s.startswith("!"):
+            continue
+        lines.append(ln)
+    return "\n".join(lines)
+
+
+def patch_show_functions(ns):
+    """Patch plt.show() y plotly.io.show() de forma SEGURA (no crashea si plotly/pio no están)."""
+    # Matplotlib
+    def _plt_show(*args, **kwargs):
+        fig = plt.gcf()
+        try:
+            st.pyplot(fig)
+        except Exception:
+            pass
+    try:
+        ns['plt'].show = _plt_show
+    except Exception:
+        pass
+
+    # Plotly: solo si pio existe y tiene .show
+    try:
+        has_plotly = 'pio' in ns and ns['pio'] is not None and hasattr(ns['pio'], 'show')
+    except Exception:
+        has_plotly = False
+
+    if has_plotly:
+        def _plotly_show(fig=None, *args, **kwargs):
+            if fig is None:
+                return
+            try:
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception:
+                pass
+        try:
+            ns['pio'].show = _plotly_show
+        except Exception:
+            pass
+
+
 st.set_page_config(page_title="HDHI — Public App (GitHub RAW)", layout="wide")
 
 # ===================== CONFIG =====================
