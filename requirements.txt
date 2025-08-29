@@ -5,5 +5,5 @@ matplotlib
 scikit-learn
 scipy
 prince
-
 nbformat
+plotly
