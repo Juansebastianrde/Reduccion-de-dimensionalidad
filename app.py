@@ -38,7 +38,7 @@ st.set_page_config(page_title="HDHI — Public App (GitHub RAW)", layout="wide")
 # ===================== CONFIG =====================
 # 👇 Pega aquí TU URL RAW pública del CSV (sin tokens), por ejemplo:
 # "https://raw.githubusercontent.com/USER/REPO/BRANCH/data/HDHI%20Admission%20data.csv"
-RAW_CSV_URL = os.environ.get("RAW_CSV_URL", "https://raw.githubusercontent.com/USER/REPO/BRANCH/path/HDHI%20Admission%20data.csv")
+RAW_CSV_URL = "https://raw.githubusercontent.com/Juansebastianrde/Reduccion-de-dimensionalidad/main/HDHI%20Admission%20data.csv"
 
 # Ruta del notebook incluida en el repo (no se muestra el código)
 NOTEBOOK_PATH = os.environ.get("NOTEBOOK_PATH", "Proyecto_ML (1).ipynb")
