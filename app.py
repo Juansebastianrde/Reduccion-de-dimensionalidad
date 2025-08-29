@@ -40,7 +40,7 @@ st.set_page_config(page_title="HDHI — Public App (GitHub RAW)", layout="wide")
 # "https://raw.githubusercontent.com/USER/REPO/BRANCH/data/HDHI%20Admission%20data.csv"
 RAW_CSV_URL = "https://raw.githubusercontent.com/Juansebastianrde/Reduccion-de-dimensionalidad/main/HDHI%20Admission%20data.csv"
 # Ruta del notebook incluida en el repo (no se muestra el código)
-NOTEBOOK_RAW_URL = "https://raw.githubusercontent.com/Juansebastianrde/Reduccion-de-dimensionalidad/main/Proyecto_ML%20(1).ipynb"
+NOTEBOOK_PATH = "Proyecto_ML (1).ipynb"
 
 
 # ==================================================
