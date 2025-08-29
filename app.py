@@ -1,15 +1,13 @@
 
-# streamlit run app_from_notebook_full.py
-# Streamlit app generated from your notebook (robust figure capture)
-
+# streamlit run hdhi_final_app.py
 import os
 import io
-import types
+import gc
 import numpy as np
 import pandas as pd
 import streamlit as st
-import matplotlib
 import matplotlib.pyplot as plt
+import traceback
 
 from contextlib import redirect_stdout
 from scipy import stats
@@ -23,26 +21,24 @@ from sklearn.linear_model import LinearRegression
 from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestRegressor
 
-# Optional Plotly
+# Plotly optional (we'll prefer to have it installed, but handle fallback gracefully)
 try:
     import plotly.express as px
     import plotly.graph_objects as go
     import plotly.io as pio
     HAS_PLOTLY = True
 except Exception:
-    px = None
-    go = None
-    pio = None
+    px = None; go = None; pio = None
     HAS_PLOTLY = False
 
 import nbformat
-import traceback
 
-st.set_page_config(page_title="HDHI Admission — Notebook App (Full)", layout="wide")
+st.set_page_config(page_title="HDHI Admission — Final App", layout="wide")
 
-# ---------------- Helpers ----------------
+# --------------------- Helpers ---------------------
 @st.cache_data
 def load_csv_robust():
+    """Try to load the dataset from common filenames in repo root, else raise."""
     candidates = [
         "HDHI Admission data.csv",
         "HDHI_Admission_data.csv",
@@ -83,7 +79,7 @@ def display_matplotlib_new_figs(prev_fignums):
     return set(plt.get_fignums())
 
 def discover_and_display_fig_objects(ns):
-    """Find fig-like objects left in the namespace (matplotlib figures, seaborn grids, plotly figs)."""
+    """Find and render fig-like objects in the namespace."""
     try:
         from matplotlib.figure import Figure as MplFigure
     except Exception:
@@ -92,127 +88,157 @@ def discover_and_display_fig_objects(ns):
         # Matplotlib Figure
         if MplFigure is not None and isinstance(obj, MplFigure):
             st.pyplot(obj)
-        # Seaborn FacetGrid or JointGrid has .fig
+        # Seaborn grids (FacetGrid/JointGrid) usually store .fig
         if hasattr(obj, "fig") and hasattr(obj.fig, "savefig"):
-            try:
-                st.pyplot(obj.fig)
-            except Exception:
-                pass
+            try: st.pyplot(obj.fig)
+            except Exception: pass
         # Plotly Figure
         if HAS_PLOTLY and (hasattr(obj, "to_dict") and obj.__class__.__name__.endswith("Figure")):
-            try:
-                st.plotly_chart(obj, use_container_width=True)
-            except Exception:
-                pass
+            try: st.plotly_chart(obj, use_container_width=True)
+            except Exception: pass
 
 def patch_show_functions(ns):
-    """Monkey-patch plt.show() and plotly.io.show() to render within Streamlit."""
+    """Patch plt.show() and plotly.io.show() to render inside Streamlit."""
     def _plt_show(*args, **kwargs):
         fig = plt.gcf()
-        try:
-            st.pyplot(fig)
-        except Exception:
-            pass
+        try: st.pyplot(fig)
+        except Exception: pass
     ns['plt'].show = _plt_show
     if HAS_PLOTLY and 'pio' in ns:
         def _plotly_show(fig=None, *args, **kwargs):
-            if fig is None:
-                return
-            try:
-                st.plotly_chart(fig, use_container_width=True)
-            except Exception:
-                pass
+            if fig is None: return
+            try: st.plotly_chart(fig, use_container_width=True)
+            except Exception: pass
         ns['pio'].show = _plotly_show
 
-# ---------------- UI ----------------
-st.sidebar.header("⚙️ Controles")
-app_mode = st.sidebar.radio(
-    "Secciones",
-    ["1) Cargar base de datos", "2) Filtros (GENDER / RURAL)", "3) Ejecutar Notebook completo"],
-    index=0
-)
+def clean_code(src: str) -> str:
+    lines = []
+    for line in (src or "").splitlines():
+        s = line.strip()
+        if s.startswith("%") or s.startswith("%%") or s.startswith("!"):
+            continue  # strip magics and shell
+        lines.append(line)
+    return "\n".join(lines)
 
-st.title("HDHI — App desde Notebook (Full)")
+# --------------------- UI ---------------------
+# Soft card look & select placeholders like screenshot
+st.markdown("""
+<style>
+.card {
+  background: #f6f8fb;
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+.card h3 { font-size: 1.1rem; margin: 0 0 10px 2px; color: #0f172a; font-weight: 700; }
+div[data-baseweb="select"] > div { border-radius: 12px !important; }
+.filter-item { margin-bottom: 14px; }
+</style>
+""", unsafe_allow_html=True)
 
+st.sidebar.header("⚙️ Navegación")
+page = st.sidebar.radio("Secciones", ["1) Cargar base de datos", "2) Filtros", "3) Análisis (ejecutar notebook)"], index=0)
+
+st.title("HDHI — Streamlit (Final)")
+
+# Persistencia
 if "df" not in st.session_state:
     st.session_state.df = None
 if "filtered_df" not in st.session_state:
     st.session_state.filtered_df = None
 
 # 1) Cargar base
-if app_mode == "1) Cargar base de datos":
+if page == "1) Cargar base de datos":
     st.header("1) Cargar base de datos")
-    try:
-        bd = load_csv_robust()
-        st.session_state.df = bd.copy()
-        st.success("Datos cargados.")
-        st.dataframe(bd.head(), use_container_width=True)
-    except Exception as e:
-        st.error(str(e))
-        st.stop()
+    colA, colB = st.columns([1,1])
+    with colA:
+        st.write("Carga automática (busca 'HDHI Admission data.csv' en la raíz):")
+        if st.button("Cargar automáticamente"):
+            try:
+                bd = load_csv_robust()
+                st.session_state.df = bd.copy()
+                st.success("Datos cargados automáticamente.")
+                st.dataframe(bd.head(), use_container_width=True)
+            except Exception as e:
+                st.error(str(e))
+    with colB:
+        st.write("O sube un CSV:")
+        up = st.file_uploader("Sube tu archivo .csv", type=["csv"], key="csv_up")
+        if up is not None:
+            try:
+                bd = pd.read_csv(up)
+                st.session_state.df = bd.copy()
+                st.success("Datos cargados desde el archivo subido.")
+                st.dataframe(bd.head(), use_container_width=True)
+            except Exception as e:
+                st.error(f"Error leyendo el CSV: {e}")
 
-# 2) Filtros
-elif app_mode == "2) Filtros (GENDER / RURAL)":
-    st.header("2) Filtros por GENDER y RURAL")
+# 2) Filtros (GENDER/RURAL + opcionales)
+elif page == "2) Filtros":
+    st.header("2) Filtros")
     ensure_df_loaded()
     df = st.session_state.df.copy()
 
-    missing = [c for c in ["GENDER", "RURAL"] if c not in df.columns]
-    if missing:
-        st.error(f"Faltan columnas requeridas: {missing}")
-        st.stop()
+    # Build filter card
+    card_col, _ = st.columns([1.2, 2])
+    with card_col:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("<h3>Filters</h3>", unsafe_allow_html=True)
 
-    c1, c2 = st.columns(2)
-    with c1:
-        gvals = sorted(df["GENDER"].dropna().unique().tolist(), key=lambda x: str(x))
-        map_g = {v: pretty_gender(v) for v in gvals}
-        sel_g_labels = st.multiselect("GENDER", [map_g[v] for v in gvals], default=[map_g[v] for v in gvals])
-        sel_g = [k for k,v in map_g.items() if v in sel_g_labels]
-    with c2:
-        rvals = sorted(df["RURAL"].dropna().unique().tolist(), key=lambda x: str(x))
-        map_r = {v: pretty_rural(v) for v in rvals}
-        sel_r_labels = st.multiselect("RURAL (Urbano/Rural)", [map_r[v] for v in rvals], default=[map_r[v] for v in rvals])
-        sel_r = [k for k,v in map_r.items() if v in sel_r_labels]
-
-    filtered = df[df["GENDER"].isin(sel_g) & df["RURAL"].isin(sel_r)].copy()
-    st.session_state.filtered_df = filtered
-
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Filas totales", len(df))
-    m2.metric("Filtradas", len(filtered))
-    m3.metric("Columnas", filtered.shape[1])
-    st.dataframe(filtered.head(50), use_container_width=True)
-
-    grp = filtered.groupby(["GENDER","RURAL"]).size().reset_index(name="count")
-    if len(grp) > 0:
-        if HAS_PLOTLY:
-            fig = px.bar(grp, x="GENDER", y="count", color="RURAL", barmode="group", title="Conteo por GENDER y RURAL")
-            st.plotly_chart(fig, use_container_width=True)
+        # GENDER
+        gender_value = None
+        if "GENDER" in df.columns:
+            gvals = df["GENDER"].dropna().unique().tolist()
+            gopts = ["Choose an option"] + [pretty_gender(v) for v in gvals]
+            gsel_label = st.selectbox("Gender", gopts, index=0, key="flt_gender")
+            if gsel_label != "Choose an option":
+                # reverse map
+                rev = {pretty_gender(v): v for v in gvals}
+                gender_value = rev.get(gsel_label, gsel_label)
         else:
-            fig2, ax2 = plt.subplots()
-            for r in sorted(grp['RURAL'].unique(), key=lambda x: str(x)):
-                sub = grp[grp['RURAL']==r]
-                ax2.bar(sub['GENDER'].astype(str), sub['count'], label=str(r))
-            ax2.set_title("Conteo por GENDER y RURAL")
-            ax2.legend(title="RURAL")
-            st.pyplot(fig2)
+            st.selectbox("Gender", ["Choose an option"], index=0, key="flt_gender_disabled")
 
-# 3) Ejecutar Notebook completo
-elif app_mode == "3) Ejecutar Notebook completo":
-    st.header("3) Ejecutar Notebook completo")
+        # RURAL (Urban/Rural)
+        rural_value = None
+        if "RURAL" in df.columns:
+            rvals = df["RURAL"].dropna().unique().tolist()
+            ropts = ["Choose an option"] + [pretty_rural(v) for v in rvals]
+            rsel_label = st.selectbox("Urban/Rural", ropts, index=0, key="flt_rural")
+            if rsel_label != "Choose an option":
+                rev = {pretty_rural(v): v for v in rvals}
+                rural_value = rev.get(rsel_label, rsel_label)
+        else:
+            st.selectbox("Urban/Rural", ["Choose an option"], index=0, key="flt_rural_disabled")
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # Apply filters
+    df_view = df.copy()
+    if gender_value is not None:
+        df_view = df_view[df_view["GENDER"] == gender_value]
+    if rural_value is not None:
+        df_view = df_view[df_view["RURAL"] == rural_value]
+
+    st.session_state.filtered_df = df_view
+    st.metric("Filas después de filtrar", len(df_view))
+    st.dataframe(df_view.head(50), use_container_width=True)
+
+# 3) Ejecutar notebook (sin mostrar código)
+elif page == "3) Análisis (ejecutar notebook)":
+    st.header("3) Análisis y visualizaciones")
     ensure_df_loaded()
 
-    nb_path = st.text_input("Ruta del notebook .ipynb", value="/mnt/data/Proyecto_ML (1).ipynb")
-    show_code = st.checkbox("Mostrar código de cada celda", value=False)
+    # Path del notebook (por defecto el que subiste)
+    nb_default = "/mnt/data/Proyecto_ML (1).ipynb"
+    nb_path = st.text_input("Ruta del notebook .ipynb (no se mostrará el código)", value=nb_default)
 
     if not os.path.exists(nb_path):
         st.error(f"No se encontró el notebook en: {nb_path}")
         st.stop()
 
-    st.info("Las celdas correrán sobre el DataFrame filtrado si existe; de lo contrario, se usa el completo.")
     df_base = st.session_state.filtered_df if st.session_state.filtered_df is not None else st.session_state.df
+    st.caption(f"Ejecutando el notebook sobre el DataFrame actual (shape={df_base.shape}).")
 
-    # Build namespace
+    # Namespace con librerías comunes y DF inyectado con nombres típicos
     ns = {
         "np": np, "pd": pd, "plt": plt, "st": st,
         "stats": stats,
@@ -223,58 +249,63 @@ elif app_mode == "3) Ejecutar Notebook completo":
         "LinearRegression": LinearRegression, "PCA": PCA,
         "RandomForestRegressor": RandomForestRegressor,
         "px": px, "go": go, "pio": pio,
-        # DataFrames disponibles con nombres comunes
+        # DF con varios alias
         "df": df_base.copy(), "bd": df_base.copy(),
         "data": df_base.copy(), "dataset": df_base.copy(),
         "io": io,
     }
-
-    # Patch show functions to display figures inline
+    # parchear show
     patch_show_functions(ns)
 
-    # Read notebook
+    # Leer notebook
     nb = nbformat.read(nb_path, as_version=4)
 
-    # Clean helper
-    def clean_code(src: str) -> str:
-        cleaned = []
-        for line in src.splitlines():
-            s = line.strip()
-            if s.startswith("%") or s.startswith("%%") or s.startswith("!"):
-                continue
-            cleaned.append(line)
-        return "\n".join(cleaned)
-
     prev_fignums = set(plt.get_fignums())
+    total_cells = 0
+    error_cells = 0
 
-    cell_idx = 0
-    for cell in nb.cells:
+    progress = st.progress(0.0)
+    rendered_anything = False
+
+    for i, cell in enumerate(nb.cells):
         if cell.cell_type != "code":
             continue
-        cell_idx += 1
+        total_cells += 1
         src = clean_code(cell.source or "")
         if not src.strip():
+            progress.progress(min(1.0, i/len(nb.cells)))  # step
             continue
 
-        st.markdown(f"#### Celda {cell_idx}")
-        if show_code:
-            st.code(src, language="python")
-
+        # Capturar stdout
         stdout_buf = io.StringIO()
         try:
             with redirect_stdout(stdout_buf):
                 exec(src, ns, ns)
         except Exception as e:
-            st.error(f"Error en la celda {cell_idx}: {e}")
-            st.code(traceback.format_exc())
-        out_text = stdout_buf.getvalue().strip()
-        if out_text:
-            st.text(out_text)
+            error_cells += 1
+            with st.expander(f"⚠️ Error en una celda (click para ver detalle)", expanded=False):
+                st.error(str(e))
+                st.code(traceback.format_exc())
+        finally:
+            out_text = stdout_buf.getvalue().strip()
+            if out_text:
+                with st.expander("📝 Salida de texto (conclusiones / prints)", expanded=False):
+                    st.text(out_text)
+                rendered_anything = True
 
-        # Show any new Matplotlib figures
-        prev_fignums = display_matplotlib_new_figs(prev_fignums)
+            # Mostrar figuras nuevas
+            prev_fignums = display_matplotlib_new_figs(prev_fignums)
+            # Detectar otras figuras en variables
+            discover_and_display_fig_objects(ns)
+            rendered_anything = True
 
-        # Discover fig-like objects in namespace (Plotly, Seaborn grids, Mpl Figures)
-        discover_and_display_fig_objects(ns)
+            # Cerrar figuras acumuladas para liberar memoria
+            plt.close('all'); gc.collect()
 
-    st.success("Ejecución del notebook finalizada.")
+        progress.progress(min(1.0, (i+1)/len(nb.cells)))
+
+    if not rendered_anything:
+        st.info("No se detectaron figuras ni textos. Si tu notebook genera gráficos, asegúrate de que use Matplotlib o Plotly.")
+    else:
+        st.success(f"Notebook ejecutado. Celdas ejecutadas: {total_cells}. Errores: {error_cells}.")
+
