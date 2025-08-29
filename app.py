@@ -1,366 +1,432 @@
+# app.py
+# Streamlit ML + PCA App (inspirada en NHANES PCA) adaptada a tu flujo
+# Autor: Tú :)
+# Uso: streamlit run app.py
 
-# streamlit run hdhi_public_app.py
-import os
 import io
-import gc
+import json
+import pickle
+from typing import List, Tuple, Optional
+
 import numpy as np
 import pandas as pd
 import streamlit as st
-import matplotlib.pyplot as plt
-import traceback
 
-from contextlib import redirect_stdout
-from scipy import stats
 from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler, OneHotEncoder, PolynomialFeatures
 from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler
-from sklearn.feature_selection import RFE, SelectKBest, f_regression
-from sklearn.linear_model import LinearRegression
 from sklearn.decomposition import PCA
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 
-# Plotly optional
+# Modelos
+from sklearn.linear_model import LinearRegression, Lasso, ElasticNet
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.svm import SVR
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+
+# Visualizaciones
+import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go
+
+# Opcional (para MCA de variables categóricas, si lo quieres activar)
 try:
-    import plotly.express as px
-    import plotly.graph_objects as go
-    import plotly.io as pio
-    HAS_PLOTLY = True
+    import prince  # pip install prince
+    HAS_PRINCE = True
 except Exception:
-    px = None; go = None; pio = None
-    HAS_PLOTLY = False
-
-import nbformat
-
-def clean_code(src: str) -> str:
-    """
-    Limpia magics de Notebook y comandos de shell para que no fallen en Streamlit.
-    """
-    if src is None:
-        return ""
-    lines = []
-    for ln in src.splitlines():
-        s = ln.strip()
-        if s.startswith("%") or s.startswith("%%") or s.startswith("!"):
-            continue
-        lines.append(ln)
-    return "\n".join(lines)
+    HAS_PRINCE = False
 
 
-def patch_show_functions(ns):
-    """Patch plt.show() y plotly.io.show() de forma SEGURA (no crashea si plotly/pio no están)."""
-    # Matplotlib
-    def _plt_show(*args, **kwargs):
-        fig = plt.gcf()
-        try:
-            st.pyplot(fig)
-        except Exception:
-            pass
+# -----------------------
+# Utilidades
+# -----------------------
+def load_sample_data() -> pd.DataFrame:
+    """Dataset de ejemplo si el usuario no sube CSV."""
+    from sklearn.datasets import load_diabetes
+    d = load_diabetes(as_frame=True)
+    df = d.frame.copy()
+    df.rename(columns={"target": "DURATION OF STAY"}, inplace=True)  # para simular tu target
+    return df
+
+def detect_types(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
+    num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    cat_cols = df.select_dtypes(exclude=[np.number]).columns.tolist()
+    return num_cols, cat_cols
+
+def safe_rmse(y_true, y_pred) -> float:
+    return float(np.sqrt(mean_squared_error(y_true, y_pred)))
+
+def make_download_button(data: bytes, filename: str, label: str):
+    st.download_button(label, data=data, file_name=filename, mime="application/octet-stream")
+
+def build_model(model_name: str, params: dict):
+    if model_name == "Linear Regression":
+        return LinearRegression(**params)
+    if model_name == "Lasso":
+        return Lasso(**params)
+    if model_name == "ElasticNet":
+        return ElasticNet(**params)
+    if model_name == "KNN Regressor":
+        return KNeighborsRegressor(**params)
+    if model_name == "Decision Tree":
+        return DecisionTreeRegressor(**params)
+    if model_name == "SVR (RBF)":
+        return SVR(**params)
+    if model_name == "Random Forest":
+        return RandomForestRegressor(**params)
+    if model_name == "Gradient Boosting":
+        return GradientBoostingRegressor(**params)
+    raise ValueError("Modelo no reconocido")
+
+def pca_figures(X_scaled: np.ndarray, feature_names: List[str], n_components: int):
+    pca = PCA(n_components=n_components, random_state=42)
+    scores = pca.fit_transform(X_scaled)
+    explained = pca.explained_variance_ratio_
+
+    # Scree plot
+    fig_scree = go.Figure()
+    fig_scree.add_trace(go.Bar(x=[f"PC{i+1}" for i in range(len(explained))],
+                               y=explained,
+                               name="Varianza explicada"))
+    fig_scree.add_trace(go.Scatter(x=[f"PC{i+1}" for i in range(len(explained))],
+                                   y=np.cumsum(explained),
+                                   mode="lines+markers",
+                                   name="Acumulada"))
+    fig_scree.update_layout(title="Scree Plot (PCA)", xaxis_title="Componente", yaxis_title="Proporción")
+
+    # Loadings (coeficientes)
+    loadings = pca.components_.T  # shape: [features, components]
+    load_df = pd.DataFrame(loadings, index=feature_names, columns=[f"PC{i+1}" for i in range(loadings.shape[1])])
+
+    # Biplot (PC1 vs PC2 si existen)
+    fig_biplot = None
+    if n_components >= 2:
+        fig_biplot = go.Figure()
+        fig_biplot.add_trace(go.Scatter(x=scores[:, 0], y=scores[:, 1],
+                                        mode="markers",
+                                        name="Scores"))
+        # vectores de loadings
+        scale = 3.0  # factor para visualizar flechas
+        for i, feat in enumerate(feature_names):
+            fig_biplot.add_trace(go.Scatter(
+                x=[0, loadings[i, 0]*scale],
+                y=[0, loadings[i, 1]*scale],
+                mode="lines+markers",
+                name=feat,
+                showlegend=False
+            ))
+        fig_biplot.update_layout(title="Biplot (PC1 vs PC2)",
+                                 xaxis_title="PC1", yaxis_title="PC2")
+
+    return pca, scores, explained, load_df, fig_scree, fig_biplot
+
+
+# -----------------------
+# UI
+# -----------------------
+st.set_page_config(page_title="ML + PCA App", layout="wide")
+
+st.title("📊 ML + PCA App (inspirada en NHANES) · Tu proyecto")
+st.caption("Sube tu CSV, elige target y configura el preprocesamiento, PCA y modelo. Exporta cargas PCA, predicciones y el modelo.")
+
+# Sidebar: datos
+st.sidebar.header("1) Datos")
+uploaded = st.sidebar.file_uploader("Sube tu CSV (separador por defecto: coma)", type=["csv"])
+
+if uploaded:
     try:
-        ns['plt'].show = _plt_show
+        df = pd.read_csv(uploaded)
     except Exception:
-        pass
+        # Reintento común: punto y coma
+        uploaded.seek(0)
+        df = pd.read_csv(uploaded, sep=";")
+else:
+    st.sidebar.info("Sin CSV: usando dataset de ejemplo.")
+    df = load_sample_data()
 
-    # Plotly: solo si pio existe y tiene .show
-    try:
-        has_plotly = 'pio' in ns and ns['pio'] is not None and hasattr(ns['pio'], 'show')
-    except Exception:
-        has_plotly = False
+st.subheader("Vista rápida de datos")
+st.write(df.head())
+st.write("Forma:", df.shape)
 
-    if has_plotly:
-        def _plotly_show(fig=None, *args, **kwargs):
-            if fig is None:
-                return
-            try:
-                st.plotly_chart(fig, use_container_width=True)
-            except Exception:
-                pass
-        try:
-            ns['pio'].show = _plotly_show
-        except Exception:
-            pass
-# --- STUB para google.colab en entornos sin Colab ---
-import sys, types
+# Selección de target
+default_target = "DURATION OF STAY" if "DURATION OF STAY" in df.columns else None
+target = st.selectbox("Variable objetivo (target)", options=[None] + df.columns.tolist(), index=(df.columns.tolist().index(default_target) + 1) if default_target else 0)
 
-def install_colab_stubs():
-    """Crea módulos falsos 'google' y 'google.colab' para que las celdas con imports de Colab no fallen."""
-    if 'google.colab' in sys.modules:
-        return  # ya existe
+if target is None:
+    st.warning("Selecciona la variable objetivo para continuar con el entrenamiento de modelos.")
+else:
+    # Detectar tipos
+    num_cols_all, cat_cols_all = detect_types(df.drop(columns=[target], errors="ignore"))
 
-    google_mod = types.ModuleType("google")
-    colab_mod = types.ModuleType("google.colab")
+    st.sidebar.header("2) Selección de variables")
+    with st.sidebar.expander("Columnas numéricas", expanded=True):
+        num_cols = st.multiselect("Numéricas a usar", num_cols_all, default=num_cols_all)
+    with st.sidebar.expander("Columnas categóricas", expanded=True):
+        cat_cols = st.multiselect("Categóricas a usar", cat_cols_all, default=cat_cols_all)
 
-    # Submódulos/atributos usados comúnmente en notebooks de Colab:
-    colab_mod.drive = types.SimpleNamespace(
-        mount=lambda *args, **kwargs: None
+    # Preprocesamiento
+    st.sidebar.header("3) Preprocesamiento")
+    imp_num_strategy = st.sidebar.selectbox("Imputación numérica", ["mean", "median"], index=0)
+    imp_cat_strategy = st.sidebar.selectbox("Imputación categórica", ["most_frequent", "constant"], index=0)
+    use_scaler = st.sidebar.checkbox("Estandarizar numéricas (z-score)", value=True)
+    add_polynomial = st.sidebar.checkbox("Añadir rasgos polinomiales (numéricas)", value=False)
+    poly_degree = st.sidebar.slider("Grado polinomial", 2, 4, 2, disabled=not add_polynomial, help="Aplica solo a numéricas")
+
+    # Split
+    st.sidebar.header("4) Partición Train/Test")
+    test_size = st.sidebar.slider("Test size", 0.1, 0.4, 0.2, 0.05)
+    random_state = st.sidebar.number_input("Random seed", min_value=0, value=42, step=1)
+
+    # PCA
+    st.sidebar.header("5) PCA (opcional, numéricas)")
+    do_pca = st.sidebar.checkbox("Activar PCA", value=False)
+    pca_components = st.sidebar.slider("N° componentes (PCA)", 2, max(2, len(num_cols) if num_cols else 2), min(5, len(num_cols) if num_cols else 2), 1, disabled=not do_pca)
+
+    # (Opcional) MCA
+    st.sidebar.header("6) MCA (solo categóricas, opcional)")
+    do_mca = st.sidebar.checkbox("Activar MCA (si prince disponible)", value=False, disabled=not HAS_PRINCE)
+    mca_components = st.sidebar.slider("N° componentes (MCA)", 2, max(2, len(cat_cols) if cat_cols else 2), 2, 1, disabled=(not do_mca or not HAS_PRINCE))
+
+    # Modelo
+    st.sidebar.header("7) Modelo")
+    model_name = st.sidebar.selectbox(
+        "Selecciona modelo",
+        [
+            "Linear Regression",
+            "Lasso",
+            "ElasticNet",
+            "KNN Regressor",
+            "Decision Tree",
+            "SVR (RBF)",
+            "Random Forest",
+            "Gradient Boosting",
+        ],
+        index=6  # Random Forest por defecto
     )
-    colab_mod.files = types.SimpleNamespace(
-        upload=lambda *args, **kwargs: None
-    )
-    colab_mod.output = types.SimpleNamespace(
-        clear=lambda *args, **kwargs: None
-    )
-    colab_mod.auth = types.SimpleNamespace(
-        authenticate_user=lambda *args, **kwargs: None
-    )
 
-    # Registrar en sys.modules para que "from google.colab import drive" funcione
-    google_mod.colab = colab_mod
-    sys.modules['google'] = google_mod
-    sys.modules['google.colab'] = colab_mod
-
-
-st.set_page_config(page_title="HDHI — Public App (GitHub RAW)", layout="wide")
-
-# ===================== CONFIG =====================
-# 👇 Pega aquí TU URL RAW pública del CSV (sin tokens), por ejemplo:
-# "https://raw.githubusercontent.com/USER/REPO/BRANCH/data/HDHI%20Admission%20data.csv"
-RAW_CSV_URL = "https://raw.githubusercontent.com/Juansebastianrde/Reduccion-de-dimensionalidad/main/HDHI%20Admission%20data.csv"
-# Ruta del notebook incluida en el repo (no se muestra el código)
-NOTEBOOK_PATH = "Proyecto_ML (1).ipynb"
-
-
-# ==================================================
-
-# --------------------- Helpers ---------------------
-@st.cache_data(ttl=900)
-def load_csv_public_raw(url: str) -> pd.DataFrame:
-    if not url or "raw.githubusercontent.com" not in url:
-        raise ValueError("Configura RAW_CSV_URL con el enlace RAW público de GitHub.")
-    # Pandas puede leer directamente desde HTTPS
-    return pd.read_csv(url)
-
-def pretty_gender(v):
-    s = str(v).strip().lower()
-    if s in ["m","male","1"]: return "Hombre"
-    if s in ["f","female","0"]: return "Mujer"
-    return str(v)
-
-def pretty_rural(v):
-    s = str(v).strip().lower()
-    if s in ["1","urban","urbano","u"]: return "Urbano"
-    if s in ["0","rural","r"]: return "Rural"
-    return str(v)
-
-def display_matplotlib_new_figs(prev_fignums):
-    new_fignums = set(plt.get_fignums()) - prev_fignums
-    for fnum in sorted(new_fignums):
-        fig_obj = plt.figure(fnum)
-        st.pyplot(fig_obj)
-    return set(plt.get_fignums())
-
-def discover_and_display_fig_objects(ns):
-    try:
-        from matplotlib.figure import Figure as MplFigure
-    except Exception:
-        MplFigure = None
-    for name, obj in list(ns.items()):
-        if MplFigure is not None and isinstance(obj, MplFigure):
-            st.pyplot(obj)
-        if hasattr(obj, "fig") and hasattr(obj.fig, "savefig"):
-            try: st.pyplot(obj.fig)
-            except Exception: pass
-        if HAS_PLOTLY and (hasattr(obj, "to_dict") and obj.__class__.__name__.endswith("Figure")):
-            try: st.plotly_chart(obj, use_container_width=True)
-            except Exception: pass
-
-def patch_show_functions(ns):
-    """Patch plt.show() y plotly.io.show() de forma segura."""
-    # Matplotlib
-    def _plt_show(*args, **kwargs):
-        fig = plt.gcf()
-        try:
-            st.pyplot(fig)
-        except Exception:
-            pass
-    try:
-        ns['plt'].show = _plt_show
-    except Exception:
-        pass
-
-    # Plotly (solo si existe y tiene .show)
-    try:
-        has_plotly = 'pio' in ns and ns['pio'] is not None and hasattr(ns['pio'], 'show')
-    except Exception:
-        has_plotly = False
-
-    if has_plotly:
-        def _plotly_show(fig=None, *args, **kwargs):
-            if fig is None:
-                return
-            try:
-                st.plotly_chart(fig, use_container_width=True)
-            except Exception:
-                pass
-        try:
-            ns['pio'].show = _plotly_show
-        except Exception:
-            pass
-
-
-# --------------------- UI / Styles ---------------------
-st.markdown("""
-<style>
-.card { background:#f6f8fb; border-radius:14px; padding:16px 18px; }
-.card h3 { font-size:1.1rem; margin:0 0 10px 2px; color:#0f172a; font-weight:700; }
-div[data-baseweb="select"] > div { border-radius:12px !important; }
-.filter-item { margin-bottom:14px; }
-</style>
-""", unsafe_allow_html=True)
-
-st.sidebar.header("Navegación")
-page = st.sidebar.radio("Secciones", ["Datos", "Filtros", "Análisis"], index=0)
-
-st.title("HDHI — Public Streamlit (GitHub RAW)")
-
-# Estado
-if "df" not in st.session_state:
-    st.session_state.df = None
-if "filtered_df" not in st.session_state:
-    st.session_state.filtered_df = None
-
-# ======= Datos (siempre desde RAW público, sin upload/token) =======
-if page == "Datos":
-    st.subheader("Fuente de datos")
-    st.caption("Esta app siempre lee de **GitHub RAW** (público), no se necesitan tokens ni subir archivos.")
-
-    st.write("RAW_CSV_URL actual:")
-    st.code(RAW_CSV_URL, language="text")
-
-    try:
-        df = load_csv_public_raw(RAW_CSV_URL)
-        st.session_state.df = df.copy()
-        st.success(f"Datos cargados desde GitHub. Shape: {df.shape}")
-        st.dataframe(df.head(20), use_container_width=True)
-    except Exception as e:
-        st.error(f"No se pudo cargar el CSV desde RAW_CSV_URL.\n{e}")
-        st.info("Asegúrate de que tu repo sea PÚBLICO y la URL sea el enlace RAW correcto.")
-        st.stop()
-
-# ======= Filtros (GENDER / RURAL) =======
-elif page == "Filtros":
-    if st.session_state.df is None:
-        st.info("Ve a la pestaña **Datos** para cargar desde GitHub primero.")
-        st.stop()
-    df = st.session_state.df.copy()
-
-    card_col, _ = st.columns([1.2, 2])
-    with card_col:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("<h3>Filters</h3>", unsafe_allow_html=True)
-
-        # Gender
-        gender_value = None
-        if "GENDER" in df.columns:
-            gvals = df["GENDER"].dropna().unique().tolist()
-            gopts = ["Choose an option"] + [pretty_gender(v) for v in gvals]
-            gsel = st.selectbox("Gender", gopts, index=0, key="flt_gender")
-            if gsel != "Choose an option":
-                rev = {pretty_gender(v): v for v in gvals}
-                gender_value = rev.get(gsel, gsel)
-        else:
-            st.selectbox("Gender", ["Choose an option"], index=0, key="flt_gender_disabled")
-
-        # RURAL
-        rural_value = None
-        if "RURAL" in df.columns:
-            rvals = df["RURAL"].dropna().unique().tolist()
-            ropts = ["Choose an option"] + [pretty_rural(v) for v in rvals]
-            rsel = st.selectbox("Urban/Rural", ropts, index=0, key="flt_rural")
-            if rsel != "Choose an option":
-                rev = {pretty_rural(v): v for v in rvals}
-                rural_value = rev.get(rsel, rsel)
-        else:
-            st.selectbox("Urban/Rural", ["Choose an option"], index=0, key="flt_rural_disabled")
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    df_view = df.copy()
-    if gender_value is not None:
-        df_view = df_view[df_view["GENDER"] == gender_value]
-    if rural_value is not None:
-        df_view = df_view[df_view["RURAL"] == rural_value]
-
-    st.session_state.filtered_df = df_view
-    st.metric("Filas después de filtrar", len(df_view))
-    st.dataframe(df_view.head(50), use_container_width=True)
-
-# ======= Análisis: ejecutar notebook sin mostrar código =======
-elif page == "Análisis":
-    if st.session_state.df is None:
-        st.info("Ve a la pestaña **Datos** para cargar desde GitHub primero.")
-        st.stop()
-
-    df_base = st.session_state.filtered_df if st.session_state.filtered_df is not None else st.session_state.df
-
-    st.subheader("Ejecutar notebook (sin código)")
-    st.caption("El notebook debe estar en el **mismo repo** que esta app (archivo local en el deploy).")
-    st.write("Notebook actual:", NOTEBOOK_PATH)
-
-    if not os.path.exists(NOTEBOOK_PATH):
-        st.error(f"No se encontró el notebook en: {NOTEBOOK_PATH}")
-        st.info("Añade el .ipynb al repo público o ajusta NOTEBOOK_PATH.")
-        st.stop()
-
-    # Espacio de nombres con librerías + DF inyectado
-    ns = {
-        "np": np, "pd": pd, "plt": plt, "st": st,
-        "stats": stats,
-        "train_test_split": train_test_split,
-        "Pipeline": Pipeline, "ColumnTransformer": ColumnTransformer,
-        "SimpleImputer": SimpleImputer, "StandardScaler": StandardScaler,
-        "RFE": RFE, "SelectKBest": SelectKBest, "f_regression": f_regression,
-        "LinearRegression": LinearRegression, "PCA": PCA,
-        "RandomForestRegressor": RandomForestRegressor,
-        "px": px, "go": None, "pio": None,
-        "df": df_base.copy(), "bd": df_base.copy(), "data": df_base.copy(), "dataset": df_base.copy(),
-        "io": io,
-    }
-
-    
-    install_colab_stubs()        # ← AQUI, ANTES DEL PATCH
-    patch_show_functions(ns)     # luego el patch de plt/plotly
-
-    
-    patch_show_functions(ns)
-
-    nb = nbformat.read(NOTEBOOK_PATH, as_version=4)
-
-    prev_fignums = set(plt.get_fignums())
-    total, errors = 0, 0
-    rendered_any = False
-
-    for cell in nb.cells:
-        if cell.cell_type != "code":
-            continue
-        total += 1
-        code = clean_code(cell.source or "")
-        if not code.strip():
-            continue
-
-        stdout_buf = io.StringIO()
-        try:
-            with redirect_stdout(stdout_buf):
-                exec(code, ns, ns)
-        except Exception as e:
-            errors += 1
-            with st.expander("⚠️ Error en una celda (click para ver detalle)", expanded=False):
-                st.error(str(e))
-                st.code(traceback.format_exc())
-        finally:
-            out = stdout_buf.getvalue().strip()
-            if out:
-                with st.expander("📝 Conclusiones / prints", expanded=False):
-                    st.text(out)
-                rendered_any = True
-
-            prev_fignums = display_matplotlib_new_figs(prev_fignums)
-            discover_and_display_fig_objects(ns)
-            plt.close('all'); gc.collect()
-            rendered_any = True
-
-    if not rendered_any:
-        st.info("No se detectaron figuras ni textos. Asegura que tu notebook genere gráficos (Matplotlib/Plotly).")
+    # Hiperparámetros UI
+    params = {}
+    if model_name in ("Lasso", "ElasticNet"):
+        params["alpha"] = st.sidebar.number_input("alpha", 0.0001, 10.0, 1.0, 0.1)
+        if model_name == "ElasticNet":
+            params["l1_ratio"] = st.sidebar.slider("l1_ratio", 0.0, 1.0, 0.5, 0.05)
+        params["max_iter"] = st.sidebar.number_input("max_iter", 100, 100000, 10000, 100)
+    elif model_name == "KNN Regressor":
+        params["n_neighbors"] = st.sidebar.slider("n_neighbors", 1, 50, 5, 1)
+        params["weights"] = st.sidebar.selectbox("weights", ["uniform", "distance"], 0)
+    elif model_name == "Decision Tree":
+        params["max_depth"] = st.sidebar.slider("max_depth", 1, 50, 8, 1)
+        params["min_samples_split"] = st.sidebar.slider("min_samples_split", 2, 20, 2, 1)
+    elif model_name == "SVR (RBF)":
+        params["C"] = st.sidebar.number_input("C", 0.1, 1000.0, 10.0, 0.1)
+        params["epsilon"] = st.sidebar.number_input("epsilon", 0.0, 5.0, 0.1, 0.1)
+        params["gamma"] = st.sidebar.selectbox("gamma", ["scale", "auto"], 0)
+        params["kernel"] = "rbf"
+    elif model_name == "Random Forest":
+        params["n_estimators"] = st.sidebar.slider("n_estimators", 50, 1000, 400, 50)
+        params["max_depth"] = st.sidebar.slider("max_depth", 1, 50, 12, 1)
+        params["min_samples_split"] = st.sidebar.slider("min_samples_split", 2, 20, 2, 1)
+        params["n_jobs"] = -1
+        params["random_state"] = random_state
+    elif model_name == "Gradient Boosting":
+        params["n_estimators"] = st.sidebar.slider("n_estimators", 50, 1000, 400, 50)
+        params["learning_rate"] = st.sidebar.number_input("learning_rate", 0.001, 1.0, 0.01, 0.001, format="%.3f")
+        params["max_depth"] = st.sidebar.slider("max_depth", 1, 20, 6, 1)
+        params["subsample"] = st.sidebar.slider("subsample", 0.1, 1.0, 0.8, 0.1)
+        params["random_state"] = random_state
     else:
-        st.success(f"Notebook ejecutado. Celdas: {total}. Errores: {errors}.")
+        params = {}
+
+    # Construcción X/y
+    work_cols = [c for c in (num_cols + cat_cols) if c in df.columns and c != target]
+    if len(work_cols) == 0:
+        st.error("No hay columnas de entrada seleccionadas. Elige al menos una columna numérica o categórica.")
+        st.stop()
+
+    y = df[target]
+    X = df[work_cols].copy()
+
+    # Preprocesamiento ColumnTransformer
+    numeric_transformers = []
+    numeric_transformers.append(("imputer", SimpleImputer(strategy=imp_num_strategy)))
+    if use_scaler:
+        numeric_transformers.append(("scaler", StandardScaler()))
+    if add_polynomial:
+        numeric_transformers.append(("poly", PolynomialFeatures(degree=poly_degree, include_bias=False)))
+    num_pipe = Pipeline(steps=numeric_transformers)
+
+    cat_pipe = Pipeline(
+        steps=[
+            ("imputer", SimpleImputer(strategy=imp_cat_strategy, fill_value="missing")),
+            ("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+        ]
+    )
+
+    pre = ColumnTransformer(
+        transformers=[
+            ("num", num_pipe, [c for c in num_cols if c in X.columns]),
+            ("cat", cat_pipe, [c for c in cat_cols if c in X.columns]),
+        ],
+        remainder="drop",
+        verbose_feature_names_out=False
+    )
+
+    # Entrenamiento
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=float(test_size), random_state=random_state)
+
+    model = build_model(model_name, params)
+    pipe = Pipeline(steps=[("pre", pre), ("model", model)])
+    pipe.fit(X_train, y_train)
+
+    # Métricas
+    y_pred = pipe.predict(X_test)
+    rmse = safe_rmse(y_test, y_pred)
+    mae = float(mean_absolute_error(y_test, y_pred))
+    r2 = float(r2_score(y_test, y_pred))
+
+    st.subheader("Resultados del modelo")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("RMSE (test)", f"{rmse:,.4f}")
+    c2.metric("MAE (test)", f"{mae:,.4f}")
+    c3.metric("R² (test)", f"{r2:,.4f}")
+
+    # Gráfico de residuos
+    st.markdown("**Residuos (y_pred vs. y_true)**")
+    fig_res = px.scatter(x=y_test, y=y_pred - y_test, labels={"x": "y_true", "y": "residuo"})
+    fig_res.add_hline(y=0, line_dash="dash")
+    st.plotly_chart(fig_res, use_container_width=True)
+
+    # Importancias (si el modelo lo soporta)
+    try:
+        # Recuperar nombres de features expandido tras preprocesamiento
+        pre_fit = pipe.named_steps["pre"]
+        feature_names = pre_fit.get_feature_names_out().tolist()
+        if hasattr(pipe.named_steps["model"], "feature_importances_"):
+            importances = pipe.named_steps["model"].feature_importances_
+            imp_df = pd.DataFrame({"feature": feature_names, "importance": importances}).sort_values("importance", ascending=False).head(30)
+            st.markdown("**Top 30 features por importancia**")
+            st.dataframe(imp_df, use_container_width=True)
+            fig_imp = px.bar(imp_df, x="importance", y="feature", orientation="h")
+            st.plotly_chart(fig_imp, use_container_width=True)
+    except Exception as e:
+        st.info("No se pudieron calcular importancias de características.")
+
+    # PCA (sobre numéricas ya imputadas/estandarizadas)
+    st.subheader("PCA (numéricas)")
+    if do_pca and len(num_cols) >= 2:
+        # Creamos un pipeline solo numérico para obtener la matriz transformada limpia
+        num_only = Pipeline(steps=[
+            ("imputer", SimpleImputer(strategy=imp_num_strategy)),
+            ("scaler", StandardScaler())  # Forzamos estandarización en PCA
+        ])
+        X_num = X[num_cols].copy()
+        X_num_scaled = num_only.fit_transform(X_num)
+
+        pca, scores, explained, load_df, fig_scree, fig_biplot = pca_figures(
+            X_scaled=X_num_scaled,
+            feature_names=num_cols,
+            n_components=pca_components
+        )
+
+        st.plotly_chart(fig_scree, use_container_width=True)
+        if fig_biplot is not None:
+            st.plotly_chart(fig_biplot, use_container_width=True)
+
+        st.markdown("**Cargas (loadings)**")
+        st.dataframe(load_df.style.format("{:.3f}"), use_container_width=True)
+
+        # Descargas PCA
+        load_csv = load_df.to_csv().encode("utf-8")
+        make_download_button(load_csv, "pca_loadings.csv", "⬇️ Descargar cargas PCA (.csv)")
+
+        scores_df = pd.DataFrame(scores, columns=[f"PC{i+1}" for i in range(scores.shape[1])])
+        scores_csv = scores_df.to_csv(index=False).encode("utf-8")
+        make_download_button(scores_csv, "pca_scores.csv", "⬇️ Descargar scores PCA (.csv)")
+
+        exp_df = pd.DataFrame({
+            "PC": [f"PC{i+1}" for i in range(len(explained))],
+            "ExplainedVarianceRatio": explained,
+            "Cumulative": np.cumsum(explained)
+        })
+        exp_csv = exp_df.to_csv(index=False).encode("utf-8")
+        make_download_button(exp_csv, "pca_variance.csv", "⬇️ Descargar varianza explicada (.csv)")
+    else:
+        st.info("Activa PCA en la barra lateral para ver scree plot, biplot y cargas (requiere ≥2 numéricas).")
+
+    # MCA (opcional) si hay categóricas y prince disponible
+    if do_mca and HAS_PRINCE and len(cat_cols) >= 2:
+        st.subheader("MCA (categóricas)")
+        try:
+            X_cat = X[cat_cols].astype("category").copy()
+            mca = prince.MCA(n_components=mca_components, random_state=42)
+            mca_scores = mca.fit_transform(X_cat)
+
+            # Varianza explicada aprox (inercia)
+            eig = mca.eigenvalues_
+            total = np.sum(eig)
+            explained_mca = eig / total if total > 0 else np.zeros_like(eig)
+
+            fig_mca = px.scatter(x=mca_scores.iloc[:, 0], y=mca_scores.iloc[:, 1],
+                                 labels={"x": "Dim 1", "y": "Dim 2"},
+                                 title="MCA - Dim 1 vs Dim 2")
+            st.plotly_chart(fig_mca, use_container_width=True)
+
+            st.markdown("**Coordenadas de variables (contribuciones)**")
+            coords = mca.column_coordinates(X_cat)
+            st.dataframe(coords, use_container_width=True)
+
+            # Descargas MCA
+            scores_csv = mca_scores.to_csv(index=False).encode("utf-8")
+            make_download_button(scores_csv, "mca_scores.csv", "⬇️ Descargar scores MCA (.csv)")
+            coords_csv = coords.to_csv().encode("utf-8")
+            make_download_button(coords_csv, "mca_coords.csv", "⬇️ Descargar coordenadas MCA (.csv)")
+        except Exception as e:
+            st.warning(f"No se pudo calcular MCA: {e}")
+    elif do_mca and not HAS_PRINCE:
+        st.info("Instala 'prince' para activar MCA: pip install prince")
+
+    # Descarga de predicciones y del modelo
+    st.subheader("Descargas de salida")
+    preds_df = pd.DataFrame({
+        "y_true": y_test.reset_index(drop=True),
+        "y_pred": pd.Series(y_pred).reset_index(drop=True),
+        "residuo": pd.Series(y_pred).reset_index(drop=True) - y_test.reset_index(drop=True),
+    })
+    st.dataframe(preds_df.head(20), use_container_width=True)
+
+    preds_csv = preds_df.to_csv(index=False).encode("utf-8")
+    make_download_button(preds_csv, "predicciones.csv", "⬇️ Descargar predicciones (.csv)")
+
+    # Serializar pipeline entrenado
+    model_bytes = io.BytesIO()
+    pickle.dump(pipe, model_bytes)
+    model_bytes.seek(0)
+    make_download_button(model_bytes.getvalue(), "modelo_entrenado.pkl", "⬇️ Descargar modelo entrenado (.pkl)")
+
+    # Guardar configuración como JSON
+    config = {
+        "target": target,
+        "num_cols": num_cols,
+        "cat_cols": cat_cols,
+        "impute_num": imp_num_strategy,
+        "impute_cat": imp_cat_strategy,
+        "scale_num": use_scaler,
+        "poly_features": add_polynomial,
+        "poly_degree": poly_degree if add_polynomial else None,
+        "test_size": test_size,
+        "random_state": random_state,
+        "model": model_name,
+        "params": params,
+        "pca_enabled": do_pca,
+        "pca_components": int(pca_components) if do_pca else None,
+        "mca_enabled": do_mca and HAS_PRINCE,
+        "mca_components": int(mca_components) if (do_mca and HAS_PRINCE) else None,
+    }
+    cfg_bytes = json.dumps(config, indent=2).encode("utf-8")
+    make_download_button(cfg_bytes, "config.json", "⬇️ Descargar configuración (.json)")
+
+st.markdown("---")
+st.caption("Tip: si tu CSV trae `DURATION OF STAY`, la app lo usa por defecto como target. Asegúrate de estandarizar antes de PCA.")
