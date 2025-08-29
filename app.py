@@ -88,26 +88,38 @@ def discover_and_display_fig_objects(ns):
             except Exception: pass
 
 def patch_show_functions(ns):
+    """Patch plt.show() y plotly.io.show() de forma segura."""
+    # Matplotlib
     def _plt_show(*args, **kwargs):
         fig = plt.gcf()
-        try: st.pyplot(fig)
-        except Exception: pass
-    ns['plt'].show = _plt_show
-    if HAS_PLOTLY and 'pio' in ns:
-        def _plotly_show(fig=None, *args, **kwargs):
-            if fig is None: return
-            try: st.plotly_chart(fig, use_container_width=True)
-            except Exception: pass
-        ns['pio'].show = _plotly_show
+        try:
+            st.pyplot(fig)
+        except Exception:
+            pass
+    try:
+        ns['plt'].show = _plt_show
+    except Exception:
+        pass
 
-def clean_code(src: str) -> str:
-    lines = []
-    for line in (src or "").splitlines():
-        s = line.strip()
-        if s.startswith("%") or s.startswith("%%") or s.startswith("!"):
-            continue
-        lines.append(line)
-    return "\n".join(lines)
+    # Plotly (solo si existe y tiene .show)
+    try:
+        has_plotly = 'pio' in ns and ns['pio'] is not None and hasattr(ns['pio'], 'show')
+    except Exception:
+        has_plotly = False
+
+    if has_plotly:
+        def _plotly_show(fig=None, *args, **kwargs):
+            if fig is None:
+                return
+            try:
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception:
+                pass
+        try:
+            ns['pio'].show = _plotly_show
+        except Exception:
+            pass
+
 
 # --------------------- UI / Styles ---------------------
 st.markdown("""
