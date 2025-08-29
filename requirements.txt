@@ -6,6 +6,7 @@ plotly
 scikit-learn
 scipy
 prince
+seaborn
 nbformat
 statsmodels
 openpyxl
