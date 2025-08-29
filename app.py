@@ -160,3 +160,21 @@ st.success(f"Datos cargados: {bd.shape}")
 st.dataframe(bd.head(5), use_container_width=True)
 
 
+st.subheader("Resumen de columnas (nulos y dtypes)")
+
+# bd: tu DataFrame ya cargado
+summary = pd.DataFrame({
+    "dtype": bd.dtypes.astype(str),
+    "non_null": bd.notna().sum(),
+    "nulls": bd.isna().sum(),
+    "unique": bd.nunique(dropna=True)
+})
+summary["%nulls"] = (summary["nulls"] / len(bd) * 100).round(2)
+
+# Orden sugerido de columnas
+summary = summary[["dtype", "non_null", "nulls", "%nulls", "unique"]]
+
+st.caption(f"Filas: {len(bd):,}")
+st.dataframe(summary, use_container_width=True)
+
+
