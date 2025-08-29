@@ -177,4 +177,13 @@ summary = summary[["dtype", "non_null", "nulls", "%nulls", "unique"]]
 st.caption(f"Filas: {len(bd):,}")
 st.dataframe(summary, use_container_width=True)
 
+st.subheader("Eliminar columna: BNP")
+st.markdown("**Se decide eliminar la variabla BNP dado que tiene más del 50% de valores faltantes.**")
+
+if "BNP" in bd.columns:
+    bd.drop("BNP", axis=1, inplace=True)
+    st.success("Columna 'BNP' eliminada.")
+else:
+    st.info("La columna 'BNP' no existe en el DataFrame.")
+
 
