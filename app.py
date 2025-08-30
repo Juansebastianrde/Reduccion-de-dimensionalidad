@@ -870,5 +870,77 @@ else:
         st.session_state["X_train_processed"] = X_train_proc_df
         st.session_state["X_test_processed"]  = X_test_proc_df
 
+import streamlit as st
+import pandas as pd
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import RobustScaler
+
+st.subheader("📦 Preprocesamiento (imputación + RobustScaler)")
+
+# Recupera desde el estado (deben haberse creado en el split)
+X_train = st.session_state.get("X_train")
+X_test  = st.session_state.get("X_test")
+num_features_raw = list(st.session_state.get("num_features", []))
+cat_features_raw = list(st.session_state.get("cat_features", []))
+
+if X_train is None or X_test is None:
+    st.error("Primero realiza el split de entrenamiento/prueba.")
+else:
+    # Asegura que las listas solo incluyan columnas presentes en X_train
+    cols_train = set(X_train.columns)
+    num_features = [c for c in num_features_raw if c in cols_train]
+    cat_features = [c for c in cat_features_raw if c in cols_train]
+
+    # Evita solapamientos
+    overlap = sorted(set(num_features) & set(cat_features))
+    if overlap:
+        st.warning(f"Columnas en num y cat a la vez (se quitan de cat): {overlap}")
+        cat_features = [c for c in cat_features if c not in overlap]
+
+    # Transformadores
+    numeric_transformer = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="mean")),
+        ("scaler", RobustScaler())
+    ])
+    categorical_transformer = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="most_frequent"))
+    ])
+
+    transformers = []
+    if num_features:
+        transformers.append(("num", numeric_transformer, num_features))
+    if cat_features:
+        transformers.append(("cat", categorical_transformer, cat_features))
+
+    if not transformers:
+        st.error("No hay columnas válidas para transformar.")
+    else:
+        preprocessor = ColumnTransformer(
+            transformers=transformers,
+            remainder="drop"
+        )
+
+        # Aplicar el preprocesamiento
+        X_train_processed = preprocessor.fit_transform(X_train)
+        X_test_processed  = preprocessor.transform(X_test)
+
+        # Reconstruir DataFrames (no hay OHE aquí, por eso usamos los nombres originales)
+        out_cols = num_features + cat_features
+        X_train_proc_df = pd.DataFrame(X_train_processed, columns=out_cols, index=X_train.index)
+        X_test_proc_df  = pd.DataFrame(X_test_processed,  columns=out_cols, index=X_test.index)
+
+        st.success(f"Preprocesamiento OK · X_train_proc: {X_train_proc_df.shape} · X_test_proc: {X_test_proc_df.shape}")
+
+        # Guardar en sesión
+        st.session_state["preprocessor"] = preprocessor
+        st.session_state["X_train_processed"] = X_train_proc_df
+        st.session_state["X_test_processed"]  = X_test_proc_df
+
+        # (Opcional) muestra un vistazo
+        st.dataframe(X_train_proc_df.head(), use_container_width=True)
+
+
 
 
