@@ -462,6 +462,40 @@ resumen_show["pct_outliers"] = resumen_show["pct_outliers"].map(lambda x: f"{x:.
 
 st.dataframe(resumen_show, use_container_width=True)
 
+import streamlit as st
+import pandas as pd
+import numpy as np
+
+st.subheader("Asimetría (skewness) de variables numéricas")
+
+# Usa el DF procesado si está en sesión; si no, usa df
+df_use = st.session_state.get("df", df)
+
+# Toma las numéricas conocidas o detecta automáticamente
+num_cols = st.session_state.get("num_features") or df_use.select_dtypes(include=[np.number]).columns.tolist()
+if not num_cols:
+    st.info("No se detectaron variables numéricas.")
+else:
+    df_num = df_use[num_cols]
+
+    # 1) Asimetría con pandas
+    skew_series = df_num.skew(numeric_only=True).sort_values(ascending=False)
+    skew_df = skew_series.to_frame(name="skew")
+    skew_df["abs_skew"] = skew_df["skew"].abs()
+    skew_df = skew_df.reset_index().rename(columns={"index": "variable"})
+
+    st.markdown("**Asimetría con pandas:**")
+    st.dataframe(skew_df, use_container_width=True)
+
+    # 2) Variables con fuerte asimetría (|skew| > 2)
+    st.markdown("**Variables con |asimetría| > 2:**")
+    highly_skewed = skew_df[skew_df["abs_skew"] > 2].sort_values("abs_skew", ascending=False)
+
+    if highly_skewed.empty:
+        st.success("No hay variables con |asimetría| > 2.")
+    else:
+        st.dataframe(highly_skewed, use_container_width=True)
+
 
 
 
