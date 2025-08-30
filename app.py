@@ -871,65 +871,6 @@ else:
 
 # --- aquí termina el split y se guardan en session_state ---
 
-# =====================
-# Preprocesamiento (fix)
-# =====================
-import streamlit as st
-from sklearn.pipeline import Pipeline
-from sklearn.compose import ColumnTransformer
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import RobustScaler
-import pandas as pd  # para reconstruir DataFrames
-
-X_train = st.session_state.get("X_train")
-X_test  = st.session_state.get("X_test")
-num_features_raw = list(st.session_state.get("num_features", []))
-cat_features_raw = list(st.session_state.get("cat_features", []))
-
-if X_train is None or X_test is None:
-    st.error("Primero realiza el split de entrenamiento/prueba.")
-else:
-    cols_train = set(X_train.columns)
-    num_features = [c for c in num_features_raw if c in cols_train]
-    cat_features = [c for c in cat_features_raw if c in cols_train]
-
-    missing = sorted(set(num_features_raw + cat_features_raw) - set(num_features + cat_features))
-    if missing:
-        st.warning(f"Estas columnas estaban en tus listas pero NO en X_train y se ignoraron: {missing}")
-
-    overlap = sorted(set(num_features) & set(cat_features))
-    if overlap:
-        st.warning(f"Columnas estaban en num y cat a la vez (se quitan de cat): {overlap}")
-        cat_features = [c for c in cat_features if c not in overlap]
-
-    transformers = []
-    if num_features:
-        transformers.append(("num", Pipeline([
-            ("imputer", SimpleImputer(strategy="mean")),
-            ("scaler", RobustScaler()),
-        ]), num_features))
-    if cat_features:
-        transformers.append(("cat", Pipeline([
-            ("imputer", SimpleImputer(strategy="most_frequent")),
-        ]), cat_features))
-
-    if not transformers:
-        st.error("No hay columnas válidas para transformar (verifica tus listas).")
-    else:
-        preprocessor = ColumnTransformer(transformers=transformers, remainder="drop")
-        X_train_processed = preprocessor.fit_transform(X_train)
-        X_test_processed  = preprocessor.transform(X_test)
-
-        out_cols = num_features + cat_features
-        X_train_proc_df = pd.DataFrame(X_train_processed, columns=out_cols, index=X_train.index)
-        X_test_proc_df  = pd.DataFrame(X_test_processed,  columns=out_cols, index=X_test.index)
-
-        st.success(f"Preprocesamiento OK · X_train_proc: {X_train_proc_df.shape} · X_test_proc: {X_test_proc_df.shape}")
-
-        st.session_state["preprocessor"] = preprocessor
-        st.session_state["X_train_processed"] = X_train_proc_df
-        st.session_state["X_test_processed"]  = X_test_proc_df
-
 import streamlit as st
 import pandas as pd
 from sklearn.pipeline import Pipeline
