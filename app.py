@@ -546,5 +546,34 @@ with st.expander("Resumen interpretativo", expanded=True):
 - La variable EF (fracción de eyección) muestra un patrón particular: existe una concentración importante de registros en el valor 60, mientras que el resto de la distribución se reparte entre valores de 20 a 40. Esto genera una distribución no simétrica con un pico muy marcado en el límite superior.
 """)
 
+st.subheader("Pairplot por género")
 
+df_use = st.session_state.get("df", df)
+num_feats_all = st.session_state.get("num_features") or df_use.select_dtypes(include=[np.number]).columns.tolist()
+
+if "GENDER" not in df_use.columns:
+    st.warning("No existe la columna 'GENDER' en el DataFrame.")
+else:
+    # Convertir a etiqueta si está en 0/1 (opcional)
+    if set(df_use["GENDER"].dropna().unique()).issubset({0, 1}):
+        hue_series = df_use["GENDER"].map({1: "M", 0: "F"})
+        df_plot = df_use.copy()
+        df_plot["GENDER"] = hue_series
+    else:
+        df_plot = df_use
+
+    # Selección de variables numéricas para el pairplot
+    sel = st.multiselect(
+        "Selecciona variables numéricas (máx. 6 recomendado)",
+        options=list(num_feats_all),
+        default=list(num_feats_all)[:4]
+    )
+
+    if len(sel) < 2:
+        st.info("Elige al menos 2 variables para el pairplot.")
+    else:
+        cols = sel + ["GENDER"]
+        grid = sns.pairplot(df_plot[cols].dropna(), hue="GENDER", diag_kind="hist", height=2.5)
+        st.pyplot(grid.fig)
+        plt.close(grid.fig)
 
