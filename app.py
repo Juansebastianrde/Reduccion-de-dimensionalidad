@@ -767,6 +767,41 @@ cat_features = st.session_state.get("cat_features") or [c for c in df_use.column
 exclude = [c for c in ["D.O.A", "D.O.D", target, "SNO", "MRD No."] if c in df_use.columns]
 feat_list = [c for c in (num_features + cat_features) if c in df_use.columns and c not in exclude]
 
+import re
+import streamlit as st
+
+df_use = st.session_state.get("df", df).copy()
+df_use.columns = df_use.columns.str.strip()  # quita espacios
+
+# --------- lista de columnas a excluir (con variantes) ----------
+ban_raw = ["D.O.A", "D.O.D", "DURATION OF STAY", "SNO", "MRD No.", "MRD No"]
+def canon(name: str) -> str:
+    # normaliza: minúsculas y sin puntuación/espacios
+    return re.sub(r"[\W_]+", "", str(name)).lower()
+
+ban_canon = {canon(c) for c in ban_raw}
+
+# quita del DF por si siguen presentes
+cols_to_drop = [c for c in df_use.columns if canon(c) in ban_canon]
+if cols_to_drop:
+    df_use.drop(columns=cols_to_drop, inplace=True)
+
+# --------- recalcula features SOLO con columnas actuales ----------
+num_features = df_use.select_dtypes(include="number").columns.tolist()
+cat_features = [c for c in df_use.columns if c not in num_features]
+
+# guarda en sesión (para que todo lo demás use estas listas nuevas)
+st.session_state["df"] = df_use
+st.session_state["num_features"] = num_features
+st.session_state["cat_features"] = cat_features
+
+# si después armas feat_list, filtra otra vez por seguridad:
+target = "DURATION OF STAY"
+exclude = [c for c in ["D.O.A", "D.O.D", target, "SNO", "MRD No.", "MRD No"] if c in df_use.columns]
+feat_list = [c for c in (num_features + cat_features) if c not in exclude]
+
+
+
 st.markdown(f"**# de features seleccionadas:** {len(feat_list)}")
 st.caption(f"Excluyendo: {', '.join(exclude) if exclude else '—'}")
 
@@ -798,68 +833,75 @@ else:
     st.warning("Selecciona la variable objetivo y verifica que existan features disponibles.")
 
 import streamlit as st
-import pandas as pd
-import numpy as np
-
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import RobustScaler
 
-st.subheader("📦 Preprocesamiento")
+# Recupera desde sesión (o tus variables)
+X_train = st.session_state.get("X_train", X_train)
+X_test  = st.session_state.get("X_test", X_test)
+num_features_raw = list(st.session_state.get("num_features", []))
+cat_features_raw = list(st.session_state.get("cat_features", []))
 
-# Recupera datos y listas de features desde sesión (o desde variables locales)
-X_train = st.session_state.get("X_train")
-X_test  = st.session_state.get("X_test")
-num_features = st.session_state.get("num_features")
-cat_features = st.session_state.get("cat_features")
+# 1) Asegúrate de que X_train sea DataFrame
+assert hasattr(X_train, "columns"), "X_train debe ser un DataFrame con nombres de columnas."
 
-if X_train is None or X_test is None:
-    st.warning("Primero realiza el split de entrenamiento/prueba.")
+# 2) Filtra por columnas existentes en X_train
+cols_train = set(X_train.columns)
+num_features = [c for c in num_features_raw if c in cols_train]
+cat_features = [c for c in cat_features_raw if c in cols_train]
+
+missing = sorted(set(num_features_raw + cat_features_raw) - set(num_features + cat_features))
+if missing:
+    st.warning(f"Estas columnas estaban en tus listas pero NO en X_train y se ignoraron: {missing}")
+
+# 3) Evita solapamientos entre num y cat
+overlap = sorted(set(num_features) & set(cat_features))
+if overlap:
+    st.warning(f"Columnas estaban en num y cat a la vez (se quitan de cat): {overlap}")
+    cat_features = [c for c in cat_features if c not in overlap]
+
+# 4) Construye transformadores solo si hay columnas
+transformers = []
+if num_features:
+    transformers.append((
+        "num",
+        Pipeline([
+            ("imputer", SimpleImputer(strategy="mean")),
+            ("scaler", RobustScaler()),
+        ]),
+        num_features,
+    ))
+if cat_features:
+    transformers.append((
+        "cat",
+        Pipeline([
+            ("imputer", SimpleImputer(strategy="most_frequent")),
+        ]),
+        cat_features,
+    ))
+
+if not transformers:
+    st.error("No hay columnas válidas para transformar (verifica tus listas).")
 else:
-    # Asegura listas (pueden venir como Index)
-    num_features = list(num_features) if num_features is not None else []
-    cat_features = list(cat_features) if cat_features is not None else []
+    # Consejo: durante depuración usa 'passthrough' para no perder columnas no listadas
+    preprocessor = ColumnTransformer(transformers=transformers, remainder="drop")
 
-    # --- Transformadores ---
-    numeric_transformer = Pipeline(steps=[
-        ("imputer", SimpleImputer(strategy="mean")),
-        ("scaler", RobustScaler())
-    ])
+    # 5) Ajusta y transforma
+    X_train_processed = preprocessor.fit_transform(X_train)
+    X_test_processed  = preprocessor.transform(X_test)
 
-    categorical_transformer = Pipeline(steps=[
-        ("imputer", SimpleImputer(strategy="most_frequent"))
-    ])
+    # 6) Reconstruye DataFrames con los mismos nombres (porque no hicimos one-hot)
+    out_cols = num_features + cat_features
+    import pandas as pd
+    X_train_proc_df = pd.DataFrame(X_train_processed, columns=out_cols, index=X_train.index)
+    X_test_proc_df  = pd.DataFrame(X_test_processed,  columns=out_cols, index=X_test.index)
 
-    transformers = []
-    if len(num_features) > 0:
-        transformers.append(("num", numeric_transformer, num_features))
-    if len(cat_features) > 0:
-        transformers.append(("cat", categorical_transformer, cat_features))
+    st.success(f"Preprocesamiento OK · X_train_proc: {X_train_proc_df.shape} · X_test_proc: {X_test_proc_df.shape}")
 
-    if len(transformers) == 0:
-        st.error("No hay columnas numéricas ni categóricas para transformar.")
-    else:
-        preprocessor = ColumnTransformer(transformers=transformers, remainder="drop")
-
-        # Ajustar y transformar
-        X_train_processed = preprocessor.fit_transform(X_train)
-        X_test_processed  = preprocessor.transform(X_test)
-
-        # Reconstruir DataFrames con nombres de columnas
-        out_cols = []
-        out_cols += num_features
-        out_cols += cat_features
-
-        X_train_proc_df = pd.DataFrame(X_train_processed, columns=out_cols, index=X_train.index)
-        X_test_proc_df  = pd.DataFrame(X_test_processed,  columns=out_cols, index=X_test.index)
-
-        st.success(f"Preprocesamiento aplicado ✅  |  X_train_proc: {X_train_proc_df.shape}  |  X_test_proc: {X_test_proc_df.shape}")
-        st.dataframe(X_train_proc_df.head(), use_container_width=True)
-
-        # Guardar en sesión para siguientes pasos (modelado, etc.)
-        st.session_state["preprocessor"] = preprocessor
-        st.session_state["X_train_processed"] = X_train_proc_df
-        st.session_state["X_test_processed"]  = X_test_proc_df
+    st.session_state["preprocessor"] = preprocessor
+    st.session_state["X_train_processed"] = X_train_proc_df
+    st.session_state["X_test_processed"]  = X_test_proc_df
 
 
