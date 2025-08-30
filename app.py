@@ -449,6 +449,18 @@ else:
     resumen = outliers.groupby("variable").size().reset_index(name="n_outliers")
 
     st.dataframe(resumen.sort_values("n_outliers", ascending=False), use_container_width=True)
+st.subheader("Porcentaje de outliers por variable")
+
+# df_use: tu DataFrame; resumen: DataFrame con columna 'n_outliers'
+df_use = st.session_state.get("df", df)
+
+resumen["pct_outliers"] = (resumen["n_outliers"] / len(df_use) * 100).round(2)
+
+# Mostrar ordenado y con formato %
+resumen_show = resumen.sort_values("pct_outliers", ascending=False).copy()
+resumen_show["pct_outliers"] = resumen_show["pct_outliers"].map(lambda x: f"{x:.2f}%")
+
+st.dataframe(resumen_show, use_container_width=True)
 
 
 
