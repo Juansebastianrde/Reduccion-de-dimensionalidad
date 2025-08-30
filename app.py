@@ -650,3 +650,27 @@ else:
 
     st.pyplot(fig)
     plt.close(fig)
+
+st.subheader("¿Cómo se ve afectada la cantidad de hospitalizaciones por la edad?")
+
+# Usa el DataFrame procesado si está en sesión; si no, usa df
+df_use = st.session_state.get("df", df)
+
+if "AGE" not in df_use.columns:
+    st.warning("No existe la columna 'AGE' en el DataFrame.")
+else:
+    # Controles
+    bins = st.slider("Número de bins", 5, 80, 20, 1)
+
+    # Estilo y figura
+    sns.set_style("whitegrid")
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.histplot(data=df_use, x="AGE", bins=bins, kde=False, color="blue", ax=ax)
+
+    # Personalización
+    ax.set_title("Distribución de Edades", fontsize=16)
+    ax.set_xlabel("Edad", fontsize=12)
+    ax.set_ylabel("Frecuencia", fontsize=12)
+
+    st.pyplot(fig)
+    plt.close(fig)
