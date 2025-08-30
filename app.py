@@ -577,3 +577,37 @@ else:
         st.pyplot(grid.fig)
         plt.close(grid.fig)
 
+st.header("Relaciones bivariadas")
+
+with st.expander("Hallazgos principales", expanded=True):
+    st.markdown("""
+### Edad vs otras variables
+- No se observan tendencias lineales marcadas entre **AGE** y las demás variables.
+- Los puntos están bastante dispersos en ambos géneros.
+
+### HB vs otras variables
+- Ligera correlación negativa con **Urea** y **Creatinine** (a medida que aumentan, la hemoglobina tiende a ser más baja).
+- Diferencia por género: los hombres concentran valores algo más altos de **HB** en todos los rangos.
+
+### TLC vs otras variables
+- **TLC** presenta gran dispersión, con muchos valores extremos, pero no muestra relación clara con otras variables.
+- La distribución por género es muy similar.
+
+### Plaquetas (PLATELETS)
+- No se aprecian correlaciones fuertes con otras variables.
+- La dispersión es amplia y comparable entre hombres y mujeres.
+
+### Glucose vs Urea/Creatinine
+- No hay una correlación directa clara, aunque algunos casos con **glucosa** muy alta también muestran valores elevados de **urea** o **creatinina**.
+- Ambos géneros siguen el mismo patrón.
+
+### Urea y Creatinine
+- Relación positiva clara: a mayor **creatinina**, mayor **urea**.
+- Ambos géneros siguen exactamente la misma tendencia.
+
+### EF (fracción de eyección)
+- Se nota la concentración en el valor **60**.
+- No hay una diferencia visible entre géneros en este patrón.
+- Relación inversa tenue con **urea/creatinina**: pacientes con valores altos de estos parámetros tienden a mostrar **EF** más baja.
+""")
+
