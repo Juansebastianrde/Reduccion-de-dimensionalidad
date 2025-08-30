@@ -1017,44 +1017,38 @@ X_train_processed = st.session_state.get("X_train_processed")
 X_test_processed  = st.session_state.get("X_test_processed")
 num_features = list(st.session_state.get("num_features", []))
 
-# Validaciones
-if X_train is None or X_test is None or X_train_processed is None or X_test_processed is None:
-    st.error("Falta ejecutar el split y el preprocesamiento antes del PCA.")
+# Recupera el preprocesador
+preprocessor = st.session_state.get("preprocessor")
+
+# Si ya son DataFrames con columnas, no hagas nada
+if hasattr(X_train_processed, "columns") and hasattr(X_test_processed, "columns"):
+    X_train_proc_df = X_train_processed
+    X_test_proc_df  = X_test_processed
 else:
-    # Asegura que los 'processed' sean DataFrames con nombres de columnas
-    if not hasattr(X_train_processed, "columns"):
-        st.error("X_train_processed no es un DataFrame. Guarda el resultado del preprocesamiento como DataFrame con nombres de columnas.")
+    # Convierte a denso si viene en sparse
+    try:
+        Xtr_vals = X_train_processed.toarray()
+        Xte_vals = X_test_processed.toarray()
+    except AttributeError:
+        Xtr_vals = X_train_processed
+        Xte_vals = X_test_processed
+
+    # Nombres de salida del ColumnTransformer
+    if preprocessor is not None and hasattr(preprocessor, "get_feature_names_out"):
+        feat_out = preprocessor.get_feature_names_out()
+        # Limpia prefijos 'num__' / 'cat__'
+        feat_out = [f.split("__", 1)[1] if "__" in f else f for f in feat_out]
     else:
-        # 1) Columnas numéricas válidas en el procesado
-        cols_proc = list(X_train_processed.columns)
-        valid_num = [c for c in num_features if c in cols_proc]
-        if not valid_num:
-            st.warning("No se encontraron variables numéricas en el conjunto procesado.")
-        else:
-            # 2) Filtrar columnas procesadas usando esos nombres
-            X_train_numericas = X_train_processed[valid_num].copy()
-            X_test_numericas  = X_test_processed[valid_num].copy()
+        # Fallback si no hay preprocessor en sesión
+        feat_out = [f"feat_{i}" for i in range(Xtr_vals.shape[1])]
 
-            # 3) PCA (elige % var. explicada automáticamente)
-            var_target = st.slider("Varianza explicada objetivo", 0.50, 0.99, 0.70, 0.01)
-            pca = PCA(n_components=var_target, random_state=42)
+    # Reconstruye DataFrames con el número correcto de columnas
+    import pandas as pd
+    X_train_proc_df = pd.DataFrame(Xtr_vals, columns=feat_out, index=X_train.index)
+    X_test_proc_df  = pd.DataFrame(Xte_vals,  columns=feat_out, index=X_test.index)
 
-            Ztr = pca.fit_transform(X_train_numericas)
-            Zte = pca.transform(X_test_numericas)
-
-            pca_names = [f"PCA{i+1}" for i in range(Ztr.shape[1])]
-            Xn_train_pca = pd.DataFrame(Ztr, columns=pca_names, index=X_train.index)
-            Xn_test_pca  = pd.DataFrame(Zte, columns=pca_names, index=X_test.index)
-
-            st.success(
-                f"PCA: {len(pca_names)} componentes · var. explicada acumulada = {pca.explained_variance_ratio_.sum():.3f}"
-            )
-            st.dataframe(Xn_train_pca.head(), use_container_width=True)
-
-            # Guardar en sesión
-            st.session_state["pca_model"]   = pca
-            st.session_state["X_train_pca"] = Xn_train_pca
-            st.session_state["X_test_pca"]  = Xn_test_pca
-
+# Guarda de nuevo en sesión
+st.session_state["X_train_processed"] = X_train_proc_df
+st.session_state["X_test_processed"]  = X_test_proc_df
 
 
