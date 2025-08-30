@@ -517,6 +517,34 @@ if var_hist:
 else:
     st.info("Selecciona al menos una variable.")
 
+st.subheader("Análisis univariado — distribución de variables")
+
+with st.expander("Resumen interpretativo", expanded=True):
+    st.markdown("""
+**AGE (edad)**  
+- La variable AGE (edad) presenta una distribución aproximadamente normal con ligera asimetría hacia la derecha. La mayor parte de los registros se concentra entre los 50 y 70 años, lo que refleja que la población del dataset corresponde principalmente a adultos de mediana y mayor edad.
+
+**HB (hemoglobina)**  
+- La variable HB (hemoglobina) muestra una distribución bastante simétrica, con la mayor densidad de valores entre 12 y 14 g/dL. Los valores extremos por debajo de 8 g/dL o por encima de 18 g/dL son poco frecuentes, lo que indica que la mayoría de los registros se ubica en un rango considerado habitual.
+
+**TLC (total leucocyte count)**  
+- La variable TLC presenta una distribución altamente asimétrica a la derecha. La mayoría de los valores se concentra en rangos bajos, mientras que existe un número reducido de observaciones con valores muy elevados, que generan una cola larga en la distribución.
+
+**PLATELETS (plaquetas)**  
+- La variable PLATELETS tiene una distribución sesgada positivamente. La mayor concentración se encuentra entre 200,000 y 300,000, aunque se observan registros con valores más altos que extienden la cola de la distribución.
+
+**GLUCOSE (glucosa)**  
+- La variable GLUCOSE muestra una distribución asimétrica hacia la derecha, con un pico en los valores bajos y una dispersión amplia que incluye observaciones por encima de 400. Esto evidencia la presencia de valores extremos elevados en el dataset.
+
+**UREA**  
+- La variable UREA presenta una fuerte asimetría positiva. La mayoría de los valores se concentra por debajo de 100, aunque se registran observaciones con valores mucho más altos, que extienden la distribución hacia la derecha.
+
+**CREATININE (creatinina)**  
+- La variable CREATININE también exhibe una asimetría positiva pronunciada. La mayor parte de los registros se concentra en valores bajos, mientras que existen observaciones dispersas con valores más altos que alargan la cola de la distribución.
+
+**EF (ejection fraction)**  
+- La variable EF (fracción de eyección) muestra un patrón particular: existe una concentración importante de registros en el valor 60, mientras que el resto de la distribución se reparte entre valores de 20 a 40. Esto genera una distribución no simétrica con un pico muy marcado en el límite superior.
+""")
 
 
 
