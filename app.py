@@ -971,3 +971,32 @@ st.success(f"Preprocesamiento OK · X_train_proc: {X_train_proc_df.shape} · X_t
 st.session_state["preprocessor"] = preprocessor
 st.session_state["X_train_processed"] = X_train_proc_df
 st.session_state["X_test_processed"]  = X_test_proc_df
+
+
+import streamlit as st
+
+# 1. Obtener índices de columnas numéricas en el dataset crudo
+num_indices = [i for i, col in enumerate(X_train.columns) if col in num_features]
+
+# 2. Filtrar las columnas procesadas usando esos índices
+X_train_numericas = pd.DataFrame(
+    X_train_processed[:, num_indices],
+    columns=num_features
+)
+
+X_test_numericas = pd.DataFrame(
+    X_test_processed[:, num_indices],
+    columns=num_features
+)
+
+# PCA (elige 70% de var. explicada automáticamente)
+pca = PCA(n_components=0.70, random_state=42)
+Xn_train_pca = pca.fit_transform(X_train_numericas)
+Xn_test_pca  = pca.transform(X_test_numericas)
+
+pca_names = [f'PCA{i+1}' for i in range(Xn_train_pca.shape[1])]
+Xn_train_pca = pd.DataFrame(Xn_train_pca, columns=pca_names, index=X_train.index)
+Xn_test_pca  = pd.DataFrame(Xn_test_pca,  columns=pca_names, index=X_test.index)
+
+st.write(f'PCA: {len(pca_names)} componentes, var. explicada acumulada = {pca.explained_variance_ratio_.sum():.3f}')
+```
