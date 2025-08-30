@@ -674,3 +674,24 @@ else:
 
     st.pyplot(fig)
     plt.close(fig)
+import streamlit as st
+
+st.subheader("Interpretación de la distribución de hospitalizaciones")
+
+with st.expander("Resumen interpretativo", expanded=True):
+    st.markdown("""
+La distribución de hospitalizaciones presenta un patrón claro y esperado.
+
+**Pico de hospitalizaciones.**  
+El rango de edad con mayor número de hospitalizaciones se encuentra entre **55 y 63 años**, seguido de cerca por **63 a 68 años**. Esto es coherente con el aumento de la prevalencia de enfermedades crónicas (hipertensión, diabetes, cardiovasculares) y la acumulación de factores de riesgo a medida que las personas envejecen.
+
+**Asimetría negativa.**  
+Aunque hay hospitalizaciones en todas las edades, la mayor concentración ocurre en los grupos de mayor edad. Las personas mayores suelen tener sistemas inmunológicos más débiles y múltiples comorbilidades, lo que incrementa su vulnerabilidad a infecciones y complicaciones.
+
+**Menor frecuencia en 0–20 años.**  
+Este grupo presenta menos hospitalizaciones porque, en general, niños y adultos jóvenes tienen un sistema inmune más robusto y menor incidencia de enfermedades crónicas graves. En ellos, las hospitalizaciones suelen asociarse a accidentes, infecciones agudas o condiciones congénitas.
+
+**Conclusión.**  
+El gráfico refleja una **relación positiva entre envejecimiento y probabilidad de hospitalización**, explicada por la acumulación de riesgos y el deterioro natural del cuerpo.
+""")
+
