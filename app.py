@@ -285,6 +285,32 @@ if col_uci in df.columns:
 else:
     st.info(f"La columna '{col_uci}' no existe en el DataFrame.")
 
+st.subheader("Normalizar nombres de columnas (strip)")
+
+# Ver columnas antes
+cols_before = list(df.columns)
+st.markdown("**Antes:**")
+st.code("\n".join([str(c) for c in cols_before]))
+
+# Aplicar strip
+df.columns = df.columns.str.strip()
+
+# Ver columnas después
+cols_after = list(df.columns)
+st.markdown("**Después:**")
+st.code("\n".join([str(c) for c in cols_after]))
+
+# Mostrar lista final en tabla simple
+st.markdown("**Lista de columnas actual:**")
+st.dataframe(pd.DataFrame({"columnas": cols_after}), use_container_width=True)
+
+# Opcional: mostrar cuáles cambiaron
+changed = [i for i, (a, b) in enumerate(zip(cols_before, cols_after)) if a != b]
+if changed:
+    st.success(f"Columnas modificadas (índices): {changed}")
+else:
+    st.info("No hubo cambios en los nombres de columnas.")
+
 
 
 
