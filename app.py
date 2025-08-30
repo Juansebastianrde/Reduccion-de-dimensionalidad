@@ -502,31 +502,20 @@ import matplotlib.pyplot as plt
 
 st.subheader("Histogramas de variables numéricas")
 
-# Usa el DF procesado si está en sesión; si no, usa df
 df_use = st.session_state.get("df", df)
+num_feats = st.session_state.get("num_features") or df_use.select_dtypes(np.number).columns.tolist()
 
-# Variables numéricas (o las que ya guardaste)
-num_feats = st.session_state.get("num_features") or df_use.select_dtypes(include=[np.number]).columns.tolist()
+var_hist = st.multiselect("Elige variables", options=num_feats, default=num_feats)
+bins = st.slider("Bins", 5, 100, 50, 5)
 
-if not num_feats:
-    st.info("No hay variables numéricas para graficar.")
+if var_hist:
+    # NO pre-crear fig: deja que .hist cree la suya
+    df_use[var_hist].hist(bins=bins, figsize=(12, 8))
+    fig = plt.gcf()                 # captura la figura actual creada por .hist
+    st.pyplot(fig)
+    plt.close(fig)
 else:
-    # Selecciona cuáles graficar (por defecto todas)
-    var_hist = st.multiselect(
-        "Elige variables a incluir",
-        options=num_feats,
-        default=num_feats
-    )
-    bins = st.slider("Número de bins", 5, 100, 50, 5)
-
-    if len(var_hist) == 0:
-        st.info("Selecciona al menos una variable.")
-    else:
-        # Rejilla automática como en pandas .hist
-        fig = plt.figure(figsize=(12, 8))
-        df_use[var_hist].hist(bins=bins, figsize=(12, 8))
-        plt.tight_layout()
-        st.pyplot(fig)
+    st.info("Selecciona al menos una variable.")
 
 
 
