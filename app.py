@@ -947,6 +947,7 @@ cat_features_raw = list(st.session_state.get("cat_features", []))
 
 if X_train is None or X_test is None:
     st.error("Primero realiza el split de entrenamiento/prueba.")
+    st.stop()
 else:
     # Asegura que las listas solo incluyan columnas presentes en X_train
     cols_train = set(X_train.columns)
@@ -976,6 +977,7 @@ else:
 
     if not transformers:
         st.error("No hay columnas válidas para transformar.")
+        st.stop()
     else:
         preprocessor = ColumnTransformer(
             transformers=transformers,
@@ -986,46 +988,39 @@ else:
         X_train_processed = preprocessor.fit_transform(X_train)
         X_test_processed  = preprocessor.transform(X_test)
 
-# Reconstrucción segura de X_train_processed / X_test_processed como DataFrames
+        # ---------------- Reconstrucción segura ----------------
+        # 1) Asegura arrays densos (por si son sparse)
+        def _to_dense(m):
+            try:
+                return m.toarray()
+            except AttributeError:
+                return m
 
-preprocessor = st.session_state.get("preprocessor", preprocessor if 'preprocessor' in locals() else None)
+        Xtr_vals = _to_dense(X_train_processed)
+        Xte_vals = _to_dense(X_test_processed)
 
-# 1) Asegura arrays densos (algunos transformadores devuelven matrices sparse)
-def _to_dense(m):
-    try:
-        return m.toarray()
-    except AttributeError:
-        return m
+        # 2) Nombres reales del ColumnTransformer
+        try:
+            feat_out = list(preprocessor.get_feature_names_out())
+        except Exception:
+            feat_out = None
 
-Xtr_vals = _to_dense(X_train_processed)
-Xte_vals = _to_dense(X_test_processed)
+        if feat_out is not None:
+            # Limpia prefijos 'num__' / 'cat__'
+            feat_out = [f.split("__", 1)[1] if "__" in f else f for f in feat_out]
 
-# 2) Obtén nombres reales de salida del ColumnTransformer (si existe)
-feat_out = None
-if preprocessor is not None and hasattr(preprocessor, "get_feature_names_out"):
-    try:
-        feat_out = list(preprocessor.get_feature_names_out())
-    except Exception:
-        feat_out = None
+        # 3) Asegura que #nombres == #columnas
+        n_cols = Xtr_vals.shape[1]
+        if feat_out is None or len(feat_out) != n_cols:
+            feat_out = [f"feat_{i}" for i in range(n_cols)]
 
-# 3) Limpia prefijos num__/cat__ si los hay
-if feat_out is not None:
-    feat_out = [f.split("__", 1)[1] if "__" in f else f for f in feat_out]
+        # 4) Construye DataFrames
+        X_train_proc_df = pd.DataFrame(Xtr_vals, columns=feat_out, index=X_train.index)
+        X_test_proc_df  = pd.DataFrame(Xte_vals,  columns=feat_out, index=X_test.index)
 
-# 4) Asegura que la cantidad de nombres == número de columnas
-n_cols = Xtr_vals.shape[1]
-if feat_out is None or len(feat_out) != n_cols:
-    # Fallback a nombres genéricos si no hay coincidencia perfecta
-    feat_out = [f"feat_{i}" for i in range(n_cols)]
+        st.success(f"Preprocesamiento OK · X_train_proc: {X_train_proc_df.shape} · X_test_proc: {X_test_proc_df.shape}")
 
-# 5) Construye DataFrames con índices de X_train / X_test
-X_train_proc_df = pd.DataFrame(Xtr_vals, columns=feat_out, index=X_train.index)
-X_test_proc_df  = pd.DataFrame(Xte_vals,  columns=feat_out, index=X_test.index)
-
-st.success(f"Preprocesamiento OK · X_train_proc: {X_train_proc_df.shape} · X_test_proc: {X_test_proc_df.shape}")
-
-# 6) Guarda en sesión para pasos siguientes (PCA/MCA/modelado)
-st.session_state["X_train_processed"] = X_train_proc_df
-st.session_state["X_test_processed"]  = X_test_proc_df
-st.session_state["preprocessor"] = preprocessor
-
+        # 5) Guarda en sesión para pasos siguientes
+        st.session_state["preprocessor"] = preprocessor
+        st.session_state["X_train_processed"] = X_train_proc_df
+        st.session_state["X_test_processed"]  = X_test_proc_df
