@@ -975,19 +975,11 @@ st.session_state["X_test_processed"]  = X_test_proc_df
 
 import streamlit as st
 
-# 1. Obtener índices de columnas numéricas en el dataset crudo
-num_indices = [i for i, col in enumerate(X_train.columns) if col in num_features]
+# Selecciona columnas numéricas por NOMBRE (evita IndexError)
+valid_num = [c for c in num_features if c in X_train_processed.columns]
 
-# 2. Filtrar las columnas procesadas usando esos índices
-X_train_numericas = pd.DataFrame(
-    X_train_processed[:, num_indices],
-    columns=num_features
-)
-
-X_test_numericas = pd.DataFrame(
-    X_test_processed[:, num_indices],
-    columns=num_features
-)
+X_train_numericas = X_train_processed[valid_num].copy()
+X_test_numericas  = X_test_processed[valid_num].copy()
 
 # PCA (elige 70% de var. explicada automáticamente)
 pca = PCA(n_components=0.70, random_state=42)
@@ -999,4 +991,3 @@ Xn_train_pca = pd.DataFrame(Xn_train_pca, columns=pca_names, index=X_train.index
 Xn_test_pca  = pd.DataFrame(Xn_test_pca,  columns=pca_names, index=X_test.index)
 
 st.write(f'PCA: {len(pca_names)} componentes, var. explicada acumulada = {pca.explained_variance_ratio_.sum():.3f}')
-
