@@ -269,6 +269,19 @@ if len(bool_cols) > 0:
 else:
     st.info("No se encontraron columnas booleanas para convertir.")
 
+st.subheader("Decisión sobre variable de UCI")
+st.markdown("""
+**Teniendo en cuenta que la variable que se refiere a duración en la unidad de cuidados intensivos contiene información que no se tiene cuando un paciente es ingresado al hospital, se decide eliminar con el objetivo de hacer un análisis más realista.**
+""")
+
+# Opcional: eliminar la columna si está presente
+col_uci = "duration of intensive unit stay"
+if col_uci in bd.columns:
+    bd.drop(columns=[col_uci], inplace=True)
+    st.success(f"Columna '{col_uci}' eliminada.")
+else:
+    st.info(f"La columna '{col_uci}' no existe en el DataFrame."
+
 
 
 
