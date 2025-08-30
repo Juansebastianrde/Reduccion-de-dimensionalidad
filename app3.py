@@ -2,8 +2,8 @@
 # Tu URL ya está preconfigurada más abajo en DEFAULT_GH_URL.
 
 import streamlit as st
-st.set_page_config(page_title="Notebook → Streamlit (1:1)", layout="wide")
-st.title("Notebook → Streamlit (réplica celda por celda)")
+st.set_page_config(page_title="Notebook", layout="wide")
+st.title("Notebook proyecto ML bioestadistica")
 
 import io, re, ast, requests
 from datetime import datetime
