@@ -269,23 +269,6 @@ if len(bool_cols) > 0:
 else:
     st.info("No se encontraron columnas booleanas para convertir.")
 
-# ===========================
-# Resumen y vista de resultados
-# ===========================
-st.write("Shape final:", df.shape)
-st.dataframe(df.head(10), use_container_width=True)
 
-# Guardar en sesión para usar en pasos siguientes
-st.session_state["df"] = df
-
-# Resumen de nulos y dtypes (útil para validar)
-st.markdown("**Resumen de columnas (nulos y dtypes)**")
-summary = pd.DataFrame({
-    "dtype": df.dtypes.astype(str),
-    "non_null": df.notna().sum(),
-    "nulls": df.isna().sum()
-})
-summary["%nulls"] = (summary["nulls"] / len(df) * 100).round(2)
-st.dataframe(summary, use_container_width=True)
 
 
