@@ -399,6 +399,80 @@ else:
     st.pyplot(fig)
 
 
+st.subheader("2.2 Porcentaje de datos atípicos (método IQR)")
+
+st.markdown("""
+En las gráficas anteriores se identificó que varias variables numéricas presentan muchos atípicos.
+A continuación se calcula el **porcentaje de outliers** por variable usando el criterio **1.5 · IQR**.
+""")
+
+# Usa el DF procesado si está en sesión
+df_use = st.session_state.get("df", df)
+
+# Columnas numéricas (o usa las detectadas antes)
+num_features = st.session_state.get("num_features") or df_use.select_dtypes(include=[np.number]).columns.tolist()
+if not num_features:
+    st.info("No se detectaron variables numéricas.")
+else:
+    outliers_list = []
+
+    for c in num_features:
+        series = df_use[c].dropna()
+        if series.empty:
+            continue
+
+        Q1 = series.quantile(0.25)
+        Q3 = series.quantile(0.75)
+        IQR = Q3 - Q1
+        lower = Q1 - 1.5 * IQR
+        upper = Q3 + 1.5 * IQR
+
+        mask = (df_use[c] < lower) | (df_use[c] > upper)
+
+        temp = (
+            df_use.loc[mask, [c]]
+            .rename(columns={c: "value"})
+            .assign(
+                variable=c,
+                lower_bound=lower,
+                upper_bound=upper,
+                row_index=lambda x: x.index
+            )
+        )
+        outliers_list.append(temp)
+
+    if len(outliers_list) == 0:
+        st.info("No se encontraron outliers con el criterio 1.5·IQR.")
+    else:
+        outliers = pd.concat(outliers_list, ignore_index=True)
+
+        # Resumen por variable
+        resumen = (
+            outliers.groupby("variable", as_index=False)
+                    .size()
+                    .rename(columns={"size": "n_outliers"})
+        )
+
+        # Total de no-nulos por variable para el denominador
+        non_null_counts = df_use[num_features].notna().sum().rename("non_null")
+        resumen = resumen.merge(non_null_counts, left_on="variable", right_index=True, how="right").fillna({"n_outliers": 0})
+        resumen["n_outliers"] = resumen["n_outliers"].astype(int)
+
+        # Porcentaje
+        resumen["pct_outliers"] = (resumen["n_outliers"] / resumen["non_null"] * 100).round(2)
+        resumen = resumen.sort_values("pct_outliers", ascending=False)
+
+        st.dataframe(resumen, use_container_width=True)
+
+        # (Opcional) botón para descargar
+        st.download_button(
+            "Descargar resumen (CSV)",
+            data=resumen.to_csv(index=False).encode("utf-8-sig"),
+            file_name="resumen_outliers_iqr.csv",
+            mime="text/csv"
+        )
+
+
 
 
 
