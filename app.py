@@ -1002,5 +1002,59 @@ else:
         st.dataframe(X_train_proc_df.head(), use_container_width=True)
 
 
+st.header("PCA y MCA")
+
+import streamlit as st
+import pandas as pd
+from sklearn.decomposition import PCA
+
+st.subheader("PCA sobre variables numéricas (70% varianza por defecto)")
+
+# Recupera objetos del estado
+X_train = st.session_state.get("X_train")
+X_test  = st.session_state.get("X_test")
+X_train_processed = st.session_state.get("X_train_processed")
+X_test_processed  = st.session_state.get("X_test_processed")
+num_features = list(st.session_state.get("num_features", []))
+
+# Validaciones
+if X_train is None or X_test is None or X_train_processed is None or X_test_processed is None:
+    st.error("Falta ejecutar el split y el preprocesamiento antes del PCA.")
+else:
+    # Asegura que los 'processed' sean DataFrames con nombres de columnas
+    if not hasattr(X_train_processed, "columns"):
+        st.error("X_train_processed no es un DataFrame. Guarda el resultado del preprocesamiento como DataFrame con nombres de columnas.")
+    else:
+        # 1) Columnas numéricas válidas en el procesado
+        cols_proc = list(X_train_processed.columns)
+        valid_num = [c for c in num_features if c in cols_proc]
+        if not valid_num:
+            st.warning("No se encontraron variables numéricas en el conjunto procesado.")
+        else:
+            # 2) Filtrar columnas procesadas usando esos nombres
+            X_train_numericas = X_train_processed[valid_num].copy()
+            X_test_numericas  = X_test_processed[valid_num].copy()
+
+            # 3) PCA (elige % var. explicada automáticamente)
+            var_target = st.slider("Varianza explicada objetivo", 0.50, 0.99, 0.70, 0.01)
+            pca = PCA(n_components=var_target, random_state=42)
+
+            Ztr = pca.fit_transform(X_train_numericas)
+            Zte = pca.transform(X_test_numericas)
+
+            pca_names = [f"PCA{i+1}" for i in range(Ztr.shape[1])]
+            Xn_train_pca = pd.DataFrame(Ztr, columns=pca_names, index=X_train.index)
+            Xn_test_pca  = pd.DataFrame(Zte, columns=pca_names, index=X_test.index)
+
+            st.success(
+                f"PCA: {len(pca_names)} componentes · var. explicada acumulada = {pca.explained_variance_ratio_.sum():.3f}"
+            )
+            st.dataframe(Xn_train_pca.head(), use_container_width=True)
+
+            # Guardar en sesión
+            st.session_state["pca_model"]   = pca
+            st.session_state["X_train_pca"] = Xn_train_pca
+            st.session_state["X_test_pca"]  = Xn_test_pca
+
 
 
