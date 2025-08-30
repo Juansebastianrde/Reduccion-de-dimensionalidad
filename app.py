@@ -187,3 +187,105 @@ else:
     st.info("La columna 'BNP' no existe en el DataFrame.")
 
 
+st.header("2. Eliminar variables y transformar datos")
+
+# Partimos del DataFrame cargado previamente: `bd`
+st.write("Shape inicial:", bd.shape)
+
+# ==============================
+# Eliminar variables innecesarias
+# ==============================
+st.markdown("**Eliminar variables innecesarias**")
+cols_drop = ["SNO", "MRD No.", "month year"]
+present = [c for c in cols_drop if c in bd.columns]
+df = bd.drop(columns=present, errors="ignore").copy()
+st.success(f"Columnas eliminadas: {', '.join(present) if present else 'ninguna (no se encontraron)'}")
+
+# =======================================
+# Transformar variables de fecha a datetime
+# =======================================
+st.markdown("**Transformar variables de fecha a formato datetime**")
+if "D.O.A" in df.columns:
+    df["D.O.A"] = pd.to_datetime(df["D.O.A"], format="%m/%d/%Y", errors="coerce")
+if "D.O.D" in df.columns:
+    df["D.O.D"] = pd.to_datetime(df["D.O.D"], format="%m/%d/%Y", errors="coerce")
+
+# ===========================================================
+# Limpiar numéricas que vienen como texto y convertir a número
+# ===========================================================
+st.markdown("**Tratamiento de variables numéricas mal tipadas**")
+cols_to_clean = ["HB", "TLC", "PLATELETS", "GLUCOSE", "UREA", "CREATININE", "EF"]
+cols_found = [c for c in cols_to_clean if c in df.columns]
+
+for col in cols_found:
+    df[col] = (
+        df[col]
+        .astype(str)  # asegurar string
+        .str.strip()
+        .replace(["EMPTY", "nan", "NaN", "None", ""], np.nan)  # a NaN
+        .str.replace(r"[<>]", "", regex=True)  # quitar > y <
+        .str.replace(",", ".", regex=False)    # coma decimal -> punto
+    )
+for col in cols_found:
+    df[col] = pd.to_numeric(df[col], errors="coerce")
+
+st.success(f"Columnas limpiadas y convertidas a numérico: {', '.join(cols_found) if cols_found else 'ninguna'}")
+
+# ==========================================
+# Transformar categóricas a dummies / binario
+# ==========================================
+st.markdown("**Mapeos binarios y dummies**")
+
+# GENDER: M -> 1, F -> 0
+if "GENDER" in df.columns:
+    df["GENDER"] = df["GENDER"].map({"M": 1, "F": 0})
+
+# RURAL: R -> 1, U -> 0
+if "RURAL" in df.columns:
+    df["RURAL"] = df["RURAL"].map({"R": 1, "U": 0})
+
+# TYPE OF ADMISSION-EMERGENCY/OPD: E -> 1, O -> 0
+col_adm = "TYPE OF ADMISSION-EMERGENCY/OPD"
+if col_adm in df.columns:
+    df[col_adm] = df[col_adm].map({"E": 1, "O": 0})
+
+# CHEST INFECTION: '1' -> 1, '0' -> 0  (si viene como texto)
+if "CHEST INFECTION" in df.columns:
+    df["CHEST INFECTION"] = (
+        df["CHEST INFECTION"].astype(str).map({"1": 1, "0": 0})
+    )
+
+# OUTCOME a dummies (mantén todas las categorías como en tu código original: drop_first=False)
+if "OUTCOME" in df.columns and df["OUTCOME"].dtype == "O":
+    df = pd.get_dummies(df, columns=["OUTCOME"], drop_first=False)
+
+# ==========================================
+# Convertir columnas booleanas a 0/1 (int)
+# ==========================================
+bool_cols = df.select_dtypes(include=bool).columns
+if len(bool_cols) > 0:
+    df[bool_cols] = df[bool_cols].astype(int)
+    st.success(f"Booleans convertidos a 0/1: {', '.join(bool_cols)}")
+else:
+    st.info("No se encontraron columnas booleanas para convertir.")
+
+# ===========================
+# Resumen y vista de resultados
+# ===========================
+st.write("Shape final:", df.shape)
+st.dataframe(df.head(10), use_container_width=True)
+
+# Guardar en sesión para usar en pasos siguientes
+st.session_state["df"] = df
+
+# Resumen de nulos y dtypes (útil para validar)
+st.markdown("**Resumen de columnas (nulos y dtypes)**")
+summary = pd.DataFrame({
+    "dtype": df.dtypes.astype(str),
+    "non_null": df.notna().sum(),
+    "nulls": df.isna().sum()
+})
+summary["%nulls"] = (summary["nulls"] / len(df) * 100).round(2)
+st.dataframe(summary, use_container_width=True)
+
+
