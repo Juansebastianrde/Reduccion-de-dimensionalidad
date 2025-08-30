@@ -741,23 +741,25 @@ df_use = st.session_state.get("df", df).copy()
 df_use.columns = df_use.columns.str.strip()  # quita espacios
 
 # --------- lista de columnas a excluir (con variantes) ----------
-ban_raw = ["D.O.A", "D.O.D", "DURATION OF STAY", "SNO", "MRD No.", "MRD No"]
+import re
+df_use = st.session_state.get("df", df).copy()
+df_use.columns = df_use.columns.str.strip()  # quita espacios
+
+# NO incluir la variable objetivo aquí
+ban_raw = ["D.O.A", "D.O.D", "SNO", "MRD No.", "MRD No"]
+
 def canon(name: str) -> str:
-    # normaliza: minúsculas y sin puntuación/espacios
     return re.sub(r"[\W_]+", "", str(name)).lower()
 
 ban_canon = {canon(c) for c in ban_raw}
-
-# quita del DF por si siguen presentes
 cols_to_drop = [c for c in df_use.columns if canon(c) in ban_canon]
 if cols_to_drop:
     df_use.drop(columns=cols_to_drop, inplace=True)
 
-# --------- recalcula features SOLO con columnas actuales ----------
+# Recalcula features con el DF actualizado
 num_features = df_use.select_dtypes(include="number").columns.tolist()
 cat_features = [c for c in df_use.columns if c not in num_features]
 
-# guarda en sesión (para que todo lo demás use estas listas nuevas)
 st.session_state["df"] = df_use
 st.session_state["num_features"] = num_features
 st.session_state["cat_features"] = cat_features
