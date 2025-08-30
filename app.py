@@ -797,4 +797,69 @@ if target and feat_list:
 else:
     st.warning("Selecciona la variable objetivo y verifica que existan features disponibles.")
 
+import streamlit as st
+import pandas as pd
+import numpy as np
+
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import RobustScaler
+
+st.subheader("📦 Preprocesamiento")
+
+# Recupera datos y listas de features desde sesión (o desde variables locales)
+X_train = st.session_state.get("X_train")
+X_test  = st.session_state.get("X_test")
+num_features = st.session_state.get("num_features")
+cat_features = st.session_state.get("cat_features")
+
+if X_train is None or X_test is None:
+    st.warning("Primero realiza el split de entrenamiento/prueba.")
+else:
+    # Asegura listas (pueden venir como Index)
+    num_features = list(num_features) if num_features is not None else []
+    cat_features = list(cat_features) if cat_features is not None else []
+
+    # --- Transformadores ---
+    numeric_transformer = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="mean")),
+        ("scaler", RobustScaler())
+    ])
+
+    categorical_transformer = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="most_frequent"))
+    ])
+
+    transformers = []
+    if len(num_features) > 0:
+        transformers.append(("num", numeric_transformer, num_features))
+    if len(cat_features) > 0:
+        transformers.append(("cat", categorical_transformer, cat_features))
+
+    if len(transformers) == 0:
+        st.error("No hay columnas numéricas ni categóricas para transformar.")
+    else:
+        preprocessor = ColumnTransformer(transformers=transformers, remainder="drop")
+
+        # Ajustar y transformar
+        X_train_processed = preprocessor.fit_transform(X_train)
+        X_test_processed  = preprocessor.transform(X_test)
+
+        # Reconstruir DataFrames con nombres de columnas
+        out_cols = []
+        out_cols += num_features
+        out_cols += cat_features
+
+        X_train_proc_df = pd.DataFrame(X_train_processed, columns=out_cols, index=X_train.index)
+        X_test_proc_df  = pd.DataFrame(X_test_processed,  columns=out_cols, index=X_test.index)
+
+        st.success(f"Preprocesamiento aplicado ✅  |  X_train_proc: {X_train_proc_df.shape}  |  X_test_proc: {X_test_proc_df.shape}")
+        st.dataframe(X_train_proc_df.head(), use_container_width=True)
+
+        # Guardar en sesión para siguientes pasos (modelado, etc.)
+        st.session_state["preprocessor"] = preprocessor
+        st.session_state["X_train_processed"] = X_train_proc_df
+        st.session_state["X_test_processed"]  = X_test_proc_df
+
 
