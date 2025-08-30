@@ -1017,38 +1017,24 @@ X_train_processed = st.session_state.get("X_train_processed")
 X_test_processed  = st.session_state.get("X_test_processed")
 num_features = list(st.session_state.get("num_features", []))
 
-# Recupera el preprocesador
-preprocessor = st.session_state.get("preprocessor")
+# === nombres de salida del ColumnTransformer ===
+try:
+    feat_out = preprocessor.get_feature_names_out()
+except AttributeError:
+    # fallback por si la versión de sklearn no tiene el método
+    feat_out = [f"feat_{i}" for i in range(X_train_processed.shape[1])]
 
-# Si ya son DataFrames con columnas, no hagas nada
-if hasattr(X_train_processed, "columns") and hasattr(X_test_processed, "columns"):
-    X_train_proc_df = X_train_processed
-    X_test_proc_df  = X_test_processed
-else:
-    # Convierte a denso si viene en sparse
-    try:
-        Xtr_vals = X_train_processed.toarray()
-        Xte_vals = X_test_processed.toarray()
-    except AttributeError:
-        Xtr_vals = X_train_processed
-        Xte_vals = X_test_processed
+# limpia prefijos 'num__' / 'cat__'
+feat_out = [f.split("__", 1)[1] if "__" in f else f for f in feat_out]
 
-    # Nombres de salida del ColumnTransformer
-    if preprocessor is not None and hasattr(preprocessor, "get_feature_names_out"):
-        feat_out = preprocessor.get_feature_names_out()
-        # Limpia prefijos 'num__' / 'cat__'
-        feat_out = [f.split("__", 1)[1] if "__" in f else f for f in feat_out]
-    else:
-        # Fallback si no hay preprocessor en sesión
-        feat_out = [f"feat_{i}" for i in range(Xtr_vals.shape[1])]
+# === reconstruye DataFrames con el número correcto de columnas ===
+X_train_proc_df = pd.DataFrame(X_train_processed, columns=feat_out, index=X_train.index)
+X_test_proc_df  = pd.DataFrame(X_test_processed,  columns=feat_out, index=X_test.index)
 
-    # Reconstruye DataFrames con el número correcto de columnas
-    import pandas as pd
-    X_train_proc_df = pd.DataFrame(Xtr_vals, columns=feat_out, index=X_train.index)
-    X_test_proc_df  = pd.DataFrame(Xte_vals,  columns=feat_out, index=X_test.index)
+st.success(f"Preprocesamiento OK · X_train_proc: {X_train_proc_df.shape} · X_test_proc: {X_test_proc_df.shape}")
 
-# Guarda de nuevo en sesión
+# guarda en sesión si lo usas después
 st.session_state["X_train_processed"] = X_train_proc_df
 st.session_state["X_test_processed"]  = X_test_proc_df
-
+st.session_state["preprocessor"] = preprocessor
 
