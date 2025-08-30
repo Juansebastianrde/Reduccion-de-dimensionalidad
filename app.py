@@ -832,6 +832,57 @@ if target and feat_list:
 else:
     st.warning("Selecciona la variable objetivo y verifica que existan features disponibles.")
 
+
+import re
+import streamlit as st
+import pandas as pd
+
+def canon(s: str) -> str:
+    return re.sub(r"[\W_]+", "", str(s)).lower()
+
+# 1) Trae el DF vigente
+df_use = st.session_state.get("df", df).copy()
+df_use.columns = df_use.columns.str.strip()
+
+# 2) Mapa canónico -> nombre real
+col_map = {canon(c): c for c in df_use.columns}
+
+# 3) Intenta recuperar el target guardado o sugerir variantes
+target_prev = st.session_state.get("target", "DURATION OF STAY")
+target_key  = canon(target_prev)
+
+# Sinónimos comunes por si el nombre varía
+synonyms = ["durationofstay", "lengthofstay", "daysinhospital", "duracionestancia", target_key]
+
+# 4) Selección segura del target
+if target_key in col_map:
+    target = col_map[target_key]
+else:
+    # prueba sinónimos
+    found = next((col_map[k] for k in synonyms if k in col_map), None)
+    if found is not None:
+        target = found
+    else:
+        # último recurso: selector con columnas numéricas y de texto
+        st.warning("No se encontró la columna objetivo anterior. Selecciónala de la lista.")
+        target = st.selectbox("Variable objetivo (y)", options=list(df_use.columns))
+
+# Guarda el target final
+st.session_state["target"] = target
+
+# 5) Crea X,y evitando KeyError
+exclude = [c for c in ["D.O.A", "D.O.D", target, "SNO", "MRD No.", "MRD No"] if c in df_use.columns]
+num_features = st.session_state.get("num_features") or df_use.select_dtypes("number").columns.tolist()
+cat_features = st.session_state.get("cat_features") or [c for c in df_use.columns if c not in num_features]
+
+feat_list = [c for c in (num_features + cat_features) if c in df_use.columns and c not in exclude]
+
+X = df_use[feat_list].copy()
+y = df_use[target].copy()
+
+st.success(f"Target: **{target}** | X: {X.shape} | y: {y.shape}")
+
+
 import streamlit as st
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
@@ -903,5 +954,6 @@ else:
     st.session_state["preprocessor"] = preprocessor
     st.session_state["X_train_processed"] = X_train_proc_df
     st.session_state["X_test_processed"]  = X_test_proc_df
+
 
 
