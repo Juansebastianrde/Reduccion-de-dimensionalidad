@@ -231,6 +231,66 @@ for col in cols_found:
 
 st.success(f"Columnas limpiadas y convertidas a numérico: {', '.join(cols_found) if cols_found else 'ninguna'}")
 
+import streamlit as st
+import pandas as pd
+
+st.subheader("Mapeo a 0/1 y dummies")
+
+# Toma el df ya trabajado (o usa df local si lo tienes en el scope)
+df = st.session_state.get("df", df).copy()
+
+col_adm = "TYPE OF ADMISSION-EMERGENCY/OPD"
+modificadas = []
+
+# GENDER: M/F -> 1/0
+if "GENDER" in df.columns:
+    df["GENDER"] = (
+        df["GENDER"].astype(str).str.strip().str.upper().map({"M": 1, "F": 0})
+    )
+    modificadas.append("GENDER")
+
+# RURAL: R/U -> 1/0
+if "RURAL" in df.columns:
+    df["RURAL"] = (
+        df["RURAL"].astype(str).str.strip().str.upper().map({"R": 1, "U": 0})
+    )
+    modificadas.append("RURAL")
+
+# TYPE OF ADMISSION-EMERGENCY/OPD: E/O -> 1/0
+if col_adm in df.columns:
+    df[col_adm] = (
+        df[col_adm].astype(str).str.strip().str.upper().map({"E": 1, "O": 0})
+    )
+    modificadas.append(col_adm)
+
+# CHEST INFECTION: '1'/'0' o 1/0 -> 1/0
+if "CHEST INFECTION" in df.columns:
+    # convierte cualquier cosa a numérico; strings inválidos -> NaN
+    df["CHEST INFECTION"] = pd.to_numeric(df["CHEST INFECTION"], errors="coerce").astype("Int64")
+    modificadas.append("CHEST INFECTION")
+
+# OUTCOME -> dummies (mantén todas las categorías)
+if "OUTCOME" in df.columns:
+    df = pd.get_dummies(df, columns=["OUTCOME"], drop_first=False, dtype=int)
+    modificadas.append("OUTCOME (dummies)")
+
+# Booleans -> 0/1
+bool_cols = df.select_dtypes(include=bool).columns
+if len(bool_cols) > 0:
+    df[bool_cols] = df[bool_cols].astype(int)
+
+# Guarda y muestra
+st.session_state["df"] = df
+st.success(f"Columnas mapeadas: {', '.join(modificadas) if modificadas else '—'}")
+
+cols_preview = [c for c in ["GENDER", "RURAL", col_adm, "CHEST INFECTION"] if c in df.columns]
+cols_preview += [c for c in df.columns if c.startswith("OUTCOME_")]
+if cols_preview:
+    st.dataframe(df[cols_preview].head(), use_container_width=True)
+else:
+    st.info("No se encontraron columnas para mostrar en el preview.")
+
+
 # ==========================================
 # Convertir columnas booleanas a 0/1 (int)
 # ==========================================
