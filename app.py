@@ -742,12 +742,12 @@ df_use.columns = df_use.columns.str.strip()  # quita espacios
 
 # --------- lista de columnas a excluir (con variantes) ----------
 import re
+
 df_use = st.session_state.get("df", df).copy()
 df_use.columns = df_use.columns.str.strip()  # quita espacios
 
-# NO incluir la variable objetivo aquí
+# columnas a eliminar (NO incluir la variable objetivo)
 ban_raw = ["D.O.A", "D.O.D", "SNO", "MRD No.", "MRD No"]
-
 def canon(name: str) -> str:
     return re.sub(r"[\W_]+", "", str(name)).lower()
 
@@ -756,10 +756,17 @@ cols_to_drop = [c for c in df_use.columns if canon(c) in ban_canon]
 if cols_to_drop:
     df_use.drop(columns=cols_to_drop, inplace=True)
 
-# Recalcula features con el DF actualizado
-num_features = df_use.select_dtypes(include="number").columns.tolist()
-cat_features = [c for c in df_use.columns if c not in num_features]
+# >>> Corrección: excluir el target al recalcular las listas
+target = st.session_state.get("target", "DURATION OF STAY")
 
+num_features = df_use.select_dtypes(include="number").columns.tolist()
+# quita el target si quedó como numérica
+num_features = [c for c in num_features if c != target]
+
+# categóricas = resto sin contar el target
+cat_features = [c for c in df_use.columns if c not in num_features + [target]]
+
+# guarda en sesión
 st.session_state["df"] = df_use
 st.session_state["num_features"] = num_features
 st.session_state["cat_features"] = cat_features
