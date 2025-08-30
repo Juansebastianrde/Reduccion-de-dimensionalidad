@@ -311,6 +311,45 @@ if changed:
 else:
     st.info("No hubo cambios en los nombres de columnas.")
 
+st.subheader("2.1 Separación en variables categóricas y variables numéricas")
+
+# Lista base (tal como la definiste)
+raw_cat_features = [
+    'GENDER', 'RURAL', 'TYPE OF ADMISSION-EMERGENCY/OPD',
+    'OUTCOME_DAMA', 'OUTCOME_DISCHARGE', 'OUTCOME_EXPIRY',
+    'SMOKING', 'ALCOHOL', 'DM', 'HTN', 'CAD', 'PRIOR CMP', 'CKD',
+    'RAISED CARDIAC ENZYMES', 'SEVERE ANAEMIA', 'ANAEMIA', 'STABLE ANGINA',
+    'ACS', 'STEMI', 'ATYPICAL CHEST PAIN', 'HEART FAILURE', 'HFREF', 'HFNEF',
+    'VALVULAR', 'CHB', 'SSS', 'AKI', 'CVA INFRACT', 'CVA BLEED', 'AF', 'VT', 'PSVT',
+    'CONGENITAL', 'UTI', 'NEURO CARDIOGENIC SYNCOPE', 'ORTHOSTATIC',
+    'INFECTIVE ENDOCARDITIS', 'DVT', 'CARDIOGENIC SHOCK', 'SHOCK',
+    'PULMONARY EMBOLISM', 'CHEST INFECTION'
+]
+
+# Intersección con columnas reales del DF para evitar errores
+cat_features = [c for c in raw_cat_features if c in df.columns]
+
+# Columnas a excluir del set numérico (fechas y target si existe)
+exclude = [c for c in ['D.O.A', 'D.O.D', 'DURATION OF STAY'] if c in df.columns]
+
+# Numéricas = todo lo que no sea categórica ni excluido
+num_features = [c for c in df.columns if c not in cat_features + exclude]
+
+# Feedback visual
+st.success(f"Categóricas detectadas: {len(cat_features)} | Numéricas detectadas: {len(num_features)}")
+
+c1, c2 = st.columns(2)
+with c1:
+    st.markdown("**Categóricas**")
+    st.write(cat_features)
+with c2:
+    st.markdown("**Numéricas**")
+    st.write(num_features)
+
+# Guardar en sesión para reutilizar después
+st.session_state["cat_features"] = cat_features
+st.session_state["num_features"] = num_features
+
 
 
 
