@@ -986,54 +986,45 @@ else:
         X_train_processed = preprocessor.fit_transform(X_train)
         X_test_processed  = preprocessor.transform(X_test)
 
-        # Reconstruir DataFrames (no hay OHE aquí, por eso usamos los nombres originales)
-        out_cols = num_features + cat_features
-        X_train_proc_df = pd.DataFrame(X_train_processed, columns=out_cols, index=X_train.index)
-        X_test_proc_df  = pd.DataFrame(X_test_processed,  columns=out_cols, index=X_test.index)
+# Reconstrucción segura de X_train_processed / X_test_processed como DataFrames
 
-        st.success(f"Preprocesamiento OK · X_train_proc: {X_train_proc_df.shape} · X_test_proc: {X_test_proc_df.shape}")
+preprocessor = st.session_state.get("preprocessor", preprocessor if 'preprocessor' in locals() else None)
 
-        # Guardar en sesión
-        st.session_state["preprocessor"] = preprocessor
-        st.session_state["X_train_processed"] = X_train_proc_df
-        st.session_state["X_test_processed"]  = X_test_proc_df
+# 1) Asegura arrays densos (algunos transformadores devuelven matrices sparse)
+def _to_dense(m):
+    try:
+        return m.toarray()
+    except AttributeError:
+        return m
 
-        # (Opcional) muestra un vistazo
-        st.dataframe(X_train_proc_df.head(), use_container_width=True)
+Xtr_vals = _to_dense(X_train_processed)
+Xte_vals = _to_dense(X_test_processed)
 
+# 2) Obtén nombres reales de salida del ColumnTransformer (si existe)
+feat_out = None
+if preprocessor is not None and hasattr(preprocessor, "get_feature_names_out"):
+    try:
+        feat_out = list(preprocessor.get_feature_names_out())
+    except Exception:
+        feat_out = None
 
-st.header("PCA y MCA")
+# 3) Limpia prefijos num__/cat__ si los hay
+if feat_out is not None:
+    feat_out = [f.split("__", 1)[1] if "__" in f else f for f in feat_out]
 
-import streamlit as st
-import pandas as pd
-from sklearn.decomposition import PCA
+# 4) Asegura que la cantidad de nombres == número de columnas
+n_cols = Xtr_vals.shape[1]
+if feat_out is None or len(feat_out) != n_cols:
+    # Fallback a nombres genéricos si no hay coincidencia perfecta
+    feat_out = [f"feat_{i}" for i in range(n_cols)]
 
-st.subheader("PCA sobre variables numéricas (70% varianza por defecto)")
-
-# Recupera objetos del estado
-X_train = st.session_state.get("X_train")
-X_test  = st.session_state.get("X_test")
-X_train_processed = st.session_state.get("X_train_processed")
-X_test_processed  = st.session_state.get("X_test_processed")
-num_features = list(st.session_state.get("num_features", []))
-
-# === nombres de salida del ColumnTransformer ===
-try:
-    feat_out = preprocessor.get_feature_names_out()
-except AttributeError:
-    # fallback por si la versión de sklearn no tiene el método
-    feat_out = [f"feat_{i}" for i in range(X_train_processed.shape[1])]
-
-# limpia prefijos 'num__' / 'cat__'
-feat_out = [f.split("__", 1)[1] if "__" in f else f for f in feat_out]
-
-# === reconstruye DataFrames con el número correcto de columnas ===
-X_train_proc_df = pd.DataFrame(X_train_processed, columns=feat_out, index=X_train.index)
-X_test_proc_df  = pd.DataFrame(X_test_processed,  columns=feat_out, index=X_test.index)
+# 5) Construye DataFrames con índices de X_train / X_test
+X_train_proc_df = pd.DataFrame(Xtr_vals, columns=feat_out, index=X_train.index)
+X_test_proc_df  = pd.DataFrame(Xte_vals,  columns=feat_out, index=X_test.index)
 
 st.success(f"Preprocesamiento OK · X_train_proc: {X_train_proc_df.shape} · X_test_proc: {X_test_proc_df.shape}")
 
-# guarda en sesión si lo usas después
+# 6) Guarda en sesión para pasos siguientes (PCA/MCA/modelado)
 st.session_state["X_train_processed"] = X_train_proc_df
 st.session_state["X_test_processed"]  = X_test_proc_df
 st.session_state["preprocessor"] = preprocessor
