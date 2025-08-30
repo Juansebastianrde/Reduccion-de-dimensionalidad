@@ -737,3 +737,64 @@ else:
     corr = data[xcol].corr(data[ycol], method=corr_method)
     st.markdown(f"**Correlación ({corr_method}):** `{corr:.4f}`")
 
+import streamlit as st
+import pandas as pd
+from sklearn.model_selection import train_test_split
+
+st.header("3. Dividir conjunto de entrenamiento y prueba")
+
+with st.expander("¿Por qué esta variable objetivo?", expanded=True):
+    st.markdown("""
+La variable elegida como objetivo es de tipo **numérico continuo** y representa el número de días
+que un paciente permanece en el hospital. Su predicción tiene valor clínico y operativo
+(planificación de recursos, disponibilidad de camas y asignación de personal).
+La duración está influenciada por múltiples factores del conjunto de datos
+(diagnósticos, comorbilidades y resultados de laboratorio).
+""")
+
+# DataFrame base
+df_use = st.session_state.get("df", df)
+
+# Target y features
+target_default = "DURATION OF STAY" if "DURATION OF STAY" in df_use.columns else None
+target = st.selectbox("Variable objetivo (y)", options=[c for c in df_use.columns], index=(list(df_use.columns).index(target_default) if target_default else 0))
+
+# Usamos listas de features guardadas o las detectamos
+num_features = st.session_state.get("num_features") or df_use.select_dtypes(include="number").columns.tolist()
+cat_features = st.session_state.get("cat_features") or [c for c in df_use.columns if c not in num_features]
+
+# Excluir fechas/target si estuvieran
+exclude = [c for c in ["D.O.A", "D.O.D", target, "SNO", "MRD No."] if c in df_use.columns]
+feat_list = [c for c in (num_features + cat_features) if c in df_use.columns and c not in exclude]
+
+st.markdown(f"**# de features seleccionadas:** {len(feat_list)}")
+st.caption(f"Excluyendo: {', '.join(exclude) if exclude else '—'}")
+
+# Parámetros del split
+col_a, col_b = st.columns(2)
+with col_a:
+    test_size = st.slider("Proporción de test", 0.1, 0.5, 0.3, 0.05)
+with col_b:
+    random_state = st.number_input("Random state", min_value=0, value=42, step=1)
+
+# Ejecutar split
+if target and feat_list:
+    X = df_use[feat_list].copy()
+    y = df_use[target].copy()
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state
+    )
+
+    st.success(f"Split realizado ✅  |  X_train: {X_train.shape}  |  X_test: {X_test.shape}  |  y_train: {y_train.shape}  |  y_test: {y_test.shape}")
+
+    # Guardar en sesión para los siguientes pasos
+    st.session_state["X_train"] = X_train
+    st.session_state["X_test"]  = X_test
+    st.session_state["y_train"] = y_train
+    st.session_state["y_test"]  = y_test
+    st.session_state["target"]  = target
+else:
+    st.warning("Selecciona la variable objetivo y verifica que existan features disponibles.")
+
+
