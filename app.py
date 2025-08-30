@@ -350,6 +350,54 @@ with c2:
 st.session_state["cat_features"] = cat_features
 st.session_state["num_features"] = num_features
 
+import streamlit as st
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import math
+
+st.subheader("Boxplots de variables numéricas")
+
+# Usa df procesado si lo guardaste en la sesión; si no, usa df
+df_plot = st.session_state.get("df", df)
+
+# Detecta columnas numéricas (o usa las que guardaste antes)
+num_cols_default = st.session_state.get("num_features") or df_plot.select_dtypes(include=[np.number]).columns.tolist()
+
+# Selección de columnas a graficar (máximo 16 por rejilla como en tu ejemplo 4x4)
+cols_sel = st.multiselect(
+    "Selecciona variables numéricas",
+    options=num_cols_default,
+    default=num_cols_default[:16]
+)
+
+if len(cols_sel) == 0:
+    st.info("Selecciona al menos una columna para graficar.")
+else:
+    n = len(cols_sel)
+    cols_per_row = 4
+    rows = math.ceil(n / cols_per_row)
+
+    fig, axes = plt.subplots(rows, cols_per_row, figsize=(20, 4.5 * rows))
+    # Asegurar vector 1D de ejes aunque rows/cols cambien
+    if isinstance(axes, np.ndarray):
+        axes = axes.flatten()
+    else:
+        axes = np.array([axes])
+
+    for i, col in enumerate(cols_sel):
+        sns.boxplot(x=df_plot[col], ax=axes[i])
+        axes[i].set_title(col)
+        axes[i].tick_params(axis="x", labelrotation=45)
+
+    # Eliminar ejes vacíos si sobran
+    for j in range(i + 1, len(axes)):
+        fig.delaxes(axes[j])
+
+    fig.tight_layout()
+    st.pyplot(fig)
+
 
 
 
