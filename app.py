@@ -381,20 +381,38 @@ A continuación se calcula el **porcentaje de outliers** por variable usando el 
 """)
 
 st.subheader("2.3 Resumen de outliers por IQR (1.5·IQR)")
+# --- OUTLIERS POR IQR (1.5·IQR) ---
+
 df_use = st.session_state.get("df", df)
 num_feats = st.session_state.get("num_features", num_features)
 
 outliers_list = []
 for c in num_feats:
-    s = df_use[c].dropna()
+    # Fuerza la columna a numérico (si hay strings -> NaN)
+    col_num = pd.to_numeric(df_use[c], errors="coerce")
+    s = col_num.dropna()
     if s.empty:
         continue
-    Q1 = s.quantile(0.25); Q3 = s.quantile(0.75); IQR = Q3 - Q1
-    lower = Q1 - 1.5 * IQR; upper = Q3 + 1.5 * IQR
-    mask = (df_use[c] < lower) | (df_use[c] > upper)
-    temp = (df_use.loc[mask, [c]].rename(columns={c: "value"})
-            .assign(variable=c, lower_bound=lower, upper_bound=upper,
-                    row_index=lambda x: x.index))
+
+    Q1 = s.quantile(0.25)
+    Q3 = s.quantile(0.75)
+    IQR = Q3 - Q1
+    lower = Q1 - 1.5 * IQR
+    upper = Q3 + 1.5 * IQR
+
+    # Máscara sobre la columna ya convertida a numérico
+    mask = (col_num < lower) | (col_num > upper)
+
+    temp = (
+        df_use.loc[mask, [c]]
+        .rename(columns={c: "value"})
+        .assign(
+            variable=c,
+            lower_bound=lower,
+            upper_bound=upper,
+            row_index=lambda x: x.index
+        )
+    )
     outliers_list.append(temp)
 
 if len(outliers_list) == 0:
@@ -404,15 +422,12 @@ else:
     resumen = outliers.groupby("variable").size().reset_index(name="n_outliers")
     st.dataframe(resumen.sort_values("n_outliers", ascending=False), use_container_width=True)
 
-    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-    # FIX #2: Calcular % solo si 'resumen' existe
+    # % de outliers (usa df_use por si cambió el df)
     st.subheader("Porcentaje de outliers por variable")
-    df_use = st.session_state.get("df", df)
     resumen["pct_outliers"] = (resumen["n_outliers"] / len(df_use) * 100).round(2)
     resumen_show = resumen.sort_values("pct_outliers", ascending=False).copy()
     resumen_show["pct_outliers"] = resumen_show["pct_outliers"].map(lambda x: f"{x:.2f}%")
     st.dataframe(resumen_show, use_container_width=True)
-    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 import streamlit as st
 import pandas as pd
