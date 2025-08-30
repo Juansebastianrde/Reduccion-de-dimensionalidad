@@ -695,3 +695,45 @@ Este grupo presenta menos hospitalizaciones porque, en general, niños y adultos
 El gráfico refleja una **relación positiva entre envejecimiento y probabilidad de hospitalización**, explicada por la acumulación de riesgos y el deterioro natural del cuerpo.
 """)
 
+import streamlit as st
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+st.subheader("¿Existe relación entre la edad y los días de hospitalización?")
+
+df_use = st.session_state.get("df", df)
+
+xcol = "AGE"
+ycol = "DURATION OF STAY"
+if xcol not in df_use.columns or ycol not in df_use.columns:
+    st.warning(f"Faltan columnas: '{xcol}' o '{ycol}'.")
+else:
+    # Controles
+    alpha = st.slider("Transparencia de puntos (alpha)", 0.05, 1.0, 0.6, 0.05)
+    add_trend = st.checkbox("Añadir línea de tendencia (regresión lineal)", value=True)
+    corr_method = st.selectbox("Tipo de correlación", ["pearson", "spearman"], index=0)
+
+    # Datos sin nulos
+    data = df_use[[xcol, ycol]].dropna()
+
+    # Gráfico
+    sns.set_style("whitegrid")
+    fig, ax = plt.subplots(figsize=(8, 6))
+    sns.scatterplot(data=data, x=xcol, y=ycol, alpha=alpha, ax=ax)
+    if add_trend:
+        sns.regplot(data=data, x=xcol, y=ycol, scatter=False, color="red", ax=ax)
+
+    ax.set_title("Relación entre Edad y Días de Hospitalización")
+    ax.set_xlabel("Edad del paciente")
+    ax.set_ylabel("Días de hospitalización")
+    ax.grid(True, linestyle="--", alpha=0.5)
+
+    st.pyplot(fig)
+    plt.close(fig)
+
+    # Correlación
+    corr = data[xcol].corr(data[ycol], method=corr_method)
+    st.markdown(f"**Correlación ({corr_method}):** `{corr:.4f}`")
+
