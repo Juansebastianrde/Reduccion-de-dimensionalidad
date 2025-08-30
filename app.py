@@ -611,3 +611,42 @@ with st.expander("Hallazgos principales", expanded=True):
 - Relación inversa tenue con **urea/creatinina**: pacientes con valores altos de estos parámetros tienden a mostrar **EF** más baja.
 """)
 
+st.subheader("¿Cuál sexo presenta mayor cantidad de hospitalizaciones?")
+
+# Usa el DF procesado si está en sesión; si no, usa df
+df_use = st.session_state.get("df", df)
+
+if "GENDER" not in df_use.columns:
+    st.warning("No existe la columna 'GENDER' en el DataFrame.")
+else:
+    # Normaliza posibles codificaciones de género
+    g = df_use["GENDER"].copy()
+
+    # Si viene como números 0/1
+    if set(pd.Series(g.dropna().unique())).issubset({0, 1}):
+        g = g.map({1: "Masculino", 0: "Femenino"})
+    # Si viene como letras M/F
+    elif set(pd.Series(g.dropna().astype(str).str.upper().unique())).issubset({"M", "F"}):
+        g = g.astype(str).str.upper().map({"M": "Masculino", "F": "Femenino"})
+    else:
+        # Dejar tal cual, pero convertir a string para evitar problemas
+        g = g.astype(str)
+
+    # Conteos
+    gender_counts = g.value_counts().rename_axis("Género").reset_index(name="Cantidad")
+    st.dataframe(gender_counts, use_container_width=True)
+
+    # Gráfico
+    sns.set_style("whitegrid")
+    fig, ax = plt.subplots(figsize=(6, 4))
+    sns.barplot(x="Género", y="Cantidad", data=gender_counts, ax=ax)
+    ax.set_title("Distribución por sexo", fontsize=14)
+    ax.set_xlabel("Sexo", fontsize=12)
+    ax.set_ylabel("Cantidad de personas", fontsize=12)
+
+    # Etiquetas encima de las barras
+    for i, v in enumerate(gender_counts["Cantidad"]):
+        ax.text(i, v, str(int(v)), ha="center", va="bottom", fontsize=10)
+
+    st.pyplot(fig)
+    plt.close(fig)
