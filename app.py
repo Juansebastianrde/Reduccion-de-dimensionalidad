@@ -999,4 +999,4 @@ Xn_train_pca = pd.DataFrame(Xn_train_pca, columns=pca_names, index=X_train.index
 Xn_test_pca  = pd.DataFrame(Xn_test_pca,  columns=pca_names, index=X_test.index)
 
 st.write(f'PCA: {len(pca_names)} componentes, var. explicada acumulada = {pca.explained_variance_ratio_.sum():.3f}')
-```
+
