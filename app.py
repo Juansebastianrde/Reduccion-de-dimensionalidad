@@ -973,15 +973,42 @@ st.session_state["X_train_processed"] = X_train_proc_df
 st.session_state["X_test_processed"]  = X_test_proc_df
 
 
-import streamlit as st
 
-# Selecciona columnas numéricas por NOMBRE (evita IndexError)
+# Recupera objetos necesarios
+pre = st.session_state.get("preprocessor")           # ColumnTransformer ya fit
+X_train = st.session_state.get("X_train")
+X_test  = st.session_state.get("X_test")
+
+# 1) Reconstruir DataFrames desde las matrices procesadas (ndarray -> DataFrame)
+def _to_dense(m):
+    try:
+        return m.toarray()
+    except AttributeError:
+        return m
+
+Xtr_vals = _to_dense(X_train_processed)
+Xte_vals = _to_dense(X_test_processed)
+
+# Nombres desde el preprocesador
+try:
+    feat_out = list(pre.get_feature_names_out())
+    feat_out = [f.split("__", 1)[1] if "__" in f else f for f in feat_out]  # quita 'num__'/'cat__'
+except Exception:
+    feat_out = [f"feat_{i}" for i in range(Xtr_vals.shape[1])]
+
+X_train_processed = pd.DataFrame(Xtr_vals, columns=feat_out, index=X_train.index)
+X_test_processed  = pd.DataFrame(Xte_vals,  columns=feat_out, index=X_test.index)
+
+# Opcional: guardar para siguientes pasos
+st.session_state["X_train_processed"] = X_train_processed
+st.session_state["X_test_processed"]  = X_test_processed
+
+# 2) Seleccionar las numéricas por NOMBRE y hacer PCA
 valid_num = [c for c in num_features if c in X_train_processed.columns]
 
 X_train_numericas = X_train_processed[valid_num].copy()
 X_test_numericas  = X_test_processed[valid_num].copy()
 
-# PCA (elige 70% de var. explicada automáticamente)
 pca = PCA(n_components=0.70, random_state=42)
 Xn_train_pca = pca.fit_transform(X_train_numericas)
 Xn_test_pca  = pca.transform(X_test_numericas)
