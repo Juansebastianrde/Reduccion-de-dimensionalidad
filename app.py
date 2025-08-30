@@ -232,34 +232,6 @@ for col in cols_found:
 st.success(f"Columnas limpiadas y convertidas a numérico: {', '.join(cols_found) if cols_found else 'ninguna'}")
 
 # ==========================================
-# Transformar categóricas a dummies / binario
-# ==========================================
-st.markdown("**Mapeos binarios y dummies**")
-
-# GENDER: M -> 1, F -> 0
-if "GENDER" in df.columns:
-    df["GENDER"] = df["GENDER"].map({"M": 1, "F": 0})
-
-# RURAL: R -> 1, U -> 0
-if "RURAL" in df.columns:
-    df["RURAL"] = df["RURAL"].map({"R": 1, "U": 0})
-
-# TYPE OF ADMISSION-EMERGENCY/OPD: E -> 1, O -> 0
-col_adm = "TYPE OF ADMISSION-EMERGENCY/OPD"
-if col_adm in df.columns:
-    df[col_adm] = df[col_adm].map({"E": 1, "O": 0})
-
-# CHEST INFECTION: '1' -> 1, '0' -> 0  (si viene como texto)
-if "CHEST INFECTION" in df.columns:
-    df["CHEST INFECTION"] = (
-        df["CHEST INFECTION"].astype(str).map({"1": 1, "0": 0})
-    )
-
-# OUTCOME a dummies (mantén todas las categorías como en tu código original: drop_first=False)
-if "OUTCOME" in df.columns and df["OUTCOME"].dtype == "O":
-    df = pd.get_dummies(df, columns=["OUTCOME"], drop_first=False)
-
-# ==========================================
 # Convertir columnas booleanas a 0/1 (int)
 # ==========================================
 bool_cols = df.select_dtypes(include=bool).columns
@@ -273,8 +245,6 @@ st.subheader("Decisión sobre variable de UCI")
 st.markdown("""
 **Teniendo en cuenta que la variable que se refiere a duración en la unidad de cuidados intensivos contiene información que no se tiene cuando un paciente es ingresado al hospital, se decide eliminar con el objetivo de hacer un análisis más realista.**
 """)
-
-import streamlit as st
 
 st.subheader("Eliminar variable de UCI")
 col_uci = "duration of intensive unit stay"
@@ -310,6 +280,11 @@ if changed:
     st.success(f"Columnas modificadas (índices): {changed}")
 else:
     st.info("No hubo cambios en los nombres de columnas.")
+
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# FIX #1: Guardar el DF limpio para que TODO el resto lo use
+st.session_state["df"] = df
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 st.subheader("2.1 Separación en variables categóricas y variables numéricas")
 
@@ -400,19 +375,12 @@ else:
 
 
 st.subheader("2.2 Porcentaje de datos atípicos (método IQR)")
-
 st.markdown("""
 En las gráficas anteriores se identificó que varias variables numéricas presentan muchos atípicos.
 A continuación se calcula el **porcentaje de outliers** por variable usando el criterio **1.5 · IQR**.
 """)
 
-import streamlit as st
-import pandas as pd
-import numpy as np
-
 st.subheader("2.3 Resumen de outliers por IQR (1.5·IQR)")
-
-# Usa df y num_features ya definidos (o recupéralos de la sesión)
 df_use = st.session_state.get("df", df)
 num_feats = st.session_state.get("num_features", num_features)
 
@@ -421,25 +389,12 @@ for c in num_feats:
     s = df_use[c].dropna()
     if s.empty:
         continue
-
-    Q1 = s.quantile(0.25)
-    Q3 = s.quantile(0.75)
-    IQR = Q3 - Q1
-    lower = Q1 - 1.5 * IQR
-    upper = Q3 + 1.5 * IQR
-
+    Q1 = s.quantile(0.25); Q3 = s.quantile(0.75); IQR = Q3 - Q1
+    lower = Q1 - 1.5 * IQR; upper = Q3 + 1.5 * IQR
     mask = (df_use[c] < lower) | (df_use[c] > upper)
-
-    temp = (
-        df_use.loc[mask, [c]]
-        .rename(columns={c: "value"})
-        .assign(
-            variable=c,
-            lower_bound=lower,
-            upper_bound=upper,
-            row_index=lambda x: x.index
-        )
-    )
+    temp = (df_use.loc[mask, [c]].rename(columns={c: "value"})
+            .assign(variable=c, lower_bound=lower, upper_bound=upper,
+                    row_index=lambda x: x.index))
     outliers_list.append(temp)
 
 if len(outliers_list) == 0:
@@ -447,20 +402,17 @@ if len(outliers_list) == 0:
 else:
     outliers = pd.concat(outliers_list, ignore_index=True)
     resumen = outliers.groupby("variable").size().reset_index(name="n_outliers")
-
     st.dataframe(resumen.sort_values("n_outliers", ascending=False), use_container_width=True)
-st.subheader("Porcentaje de outliers por variable")
 
-# df_use: tu DataFrame; resumen: DataFrame con columna 'n_outliers'
-df_use = st.session_state.get("df", df)
-
-resumen["pct_outliers"] = (resumen["n_outliers"] / len(df_use) * 100).round(2)
-
-# Mostrar ordenado y con formato %
-resumen_show = resumen.sort_values("pct_outliers", ascending=False).copy()
-resumen_show["pct_outliers"] = resumen_show["pct_outliers"].map(lambda x: f"{x:.2f}%")
-
-st.dataframe(resumen_show, use_container_width=True)
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    # FIX #2: Calcular % solo si 'resumen' existe
+    st.subheader("Porcentaje de outliers por variable")
+    df_use = st.session_state.get("df", df)
+    resumen["pct_outliers"] = (resumen["n_outliers"] / len(df_use) * 100).round(2)
+    resumen_show = resumen.sort_values("pct_outliers", ascending=False).copy()
+    resumen_show["pct_outliers"] = resumen_show["pct_outliers"].map(lambda x: f"{x:.2f}%")
+    st.dataframe(resumen_show, use_container_width=True)
+    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 import streamlit as st
 import pandas as pd
@@ -833,127 +785,66 @@ else:
     st.warning("Selecciona la variable objetivo y verifica que existan features disponibles.")
 
 
-import re
-import streamlit as st
-import pandas as pd
+# --- aquí termina el split y se guardan en session_state ---
 
-def canon(s: str) -> str:
-    return re.sub(r"[\W_]+", "", str(s)).lower()
-
-# 1) Trae el DF vigente
-df_use = st.session_state.get("df", df).copy()
-df_use.columns = df_use.columns.str.strip()
-
-# 2) Mapa canónico -> nombre real
-col_map = {canon(c): c for c in df_use.columns}
-
-# 3) Intenta recuperar el target guardado o sugerir variantes
-target_prev = st.session_state.get("target", "DURATION OF STAY")
-target_key  = canon(target_prev)
-
-# Sinónimos comunes por si el nombre varía
-synonyms = ["durationofstay", "lengthofstay", "daysinhospital", "duracionestancia", target_key]
-
-# 4) Selección segura del target
-if target_key in col_map:
-    target = col_map[target_key]
-else:
-    # prueba sinónimos
-    found = next((col_map[k] for k in synonyms if k in col_map), None)
-    if found is not None:
-        target = found
-    else:
-        # último recurso: selector con columnas numéricas y de texto
-        st.warning("No se encontró la columna objetivo anterior. Selecciónala de la lista.")
-        target = st.selectbox("Variable objetivo (y)", options=list(df_use.columns))
-
-# Guarda el target final
-st.session_state["target"] = target
-
-# 5) Crea X,y evitando KeyError
-exclude = [c for c in ["D.O.A", "D.O.D", target, "SNO", "MRD No.", "MRD No"] if c in df_use.columns]
-num_features = st.session_state.get("num_features") or df_use.select_dtypes("number").columns.tolist()
-cat_features = st.session_state.get("cat_features") or [c for c in df_use.columns if c not in num_features]
-
-feat_list = [c for c in (num_features + cat_features) if c in df_use.columns and c not in exclude]
-
-X = df_use[feat_list].copy()
-y = df_use[target].copy()
-
-st.success(f"Target: **{target}** | X: {X.shape} | y: {y.shape}")
-
-
+# =====================
+# Preprocesamiento (fix)
+# =====================
 import streamlit as st
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import RobustScaler
+import pandas as pd  # para reconstruir DataFrames
 
-# Recupera desde sesión (o tus variables)
-X_train = st.session_state.get("X_train", X_train)
-X_test  = st.session_state.get("X_test", X_test)
+X_train = st.session_state.get("X_train")
+X_test  = st.session_state.get("X_test")
 num_features_raw = list(st.session_state.get("num_features", []))
 cat_features_raw = list(st.session_state.get("cat_features", []))
 
-# 1) Asegúrate de que X_train sea DataFrame
-assert hasattr(X_train, "columns"), "X_train debe ser un DataFrame con nombres de columnas."
+if X_train is None or X_test is None:
+    st.error("Primero realiza el split de entrenamiento/prueba.")
+else:
+    cols_train = set(X_train.columns)
+    num_features = [c for c in num_features_raw if c in cols_train]
+    cat_features = [c for c in cat_features_raw if c in cols_train]
 
-# 2) Filtra por columnas existentes en X_train
-cols_train = set(X_train.columns)
-num_features = [c for c in num_features_raw if c in cols_train]
-cat_features = [c for c in cat_features_raw if c in cols_train]
+    missing = sorted(set(num_features_raw + cat_features_raw) - set(num_features + cat_features))
+    if missing:
+        st.warning(f"Estas columnas estaban en tus listas pero NO en X_train y se ignoraron: {missing}")
 
-missing = sorted(set(num_features_raw + cat_features_raw) - set(num_features + cat_features))
-if missing:
-    st.warning(f"Estas columnas estaban en tus listas pero NO en X_train y se ignoraron: {missing}")
+    overlap = sorted(set(num_features) & set(cat_features))
+    if overlap:
+        st.warning(f"Columnas estaban en num y cat a la vez (se quitan de cat): {overlap}")
+        cat_features = [c for c in cat_features if c not in overlap]
 
-# 3) Evita solapamientos entre num y cat
-overlap = sorted(set(num_features) & set(cat_features))
-if overlap:
-    st.warning(f"Columnas estaban en num y cat a la vez (se quitan de cat): {overlap}")
-    cat_features = [c for c in cat_features if c not in overlap]
-
-# 4) Construye transformadores solo si hay columnas
-transformers = []
-if num_features:
-    transformers.append((
-        "num",
-        Pipeline([
+    transformers = []
+    if num_features:
+        transformers.append(("num", Pipeline([
             ("imputer", SimpleImputer(strategy="mean")),
             ("scaler", RobustScaler()),
-        ]),
-        num_features,
-    ))
-if cat_features:
-    transformers.append((
-        "cat",
-        Pipeline([
+        ]), num_features))
+    if cat_features:
+        transformers.append(("cat", Pipeline([
             ("imputer", SimpleImputer(strategy="most_frequent")),
-        ]),
-        cat_features,
-    ))
+        ]), cat_features))
 
-if not transformers:
-    st.error("No hay columnas válidas para transformar (verifica tus listas).")
-else:
-    # Consejo: durante depuración usa 'passthrough' para no perder columnas no listadas
-    preprocessor = ColumnTransformer(transformers=transformers, remainder="drop")
+    if not transformers:
+        st.error("No hay columnas válidas para transformar (verifica tus listas).")
+    else:
+        preprocessor = ColumnTransformer(transformers=transformers, remainder="drop")
+        X_train_processed = preprocessor.fit_transform(X_train)
+        X_test_processed  = preprocessor.transform(X_test)
 
-    # 5) Ajusta y transforma
-    X_train_processed = preprocessor.fit_transform(X_train)
-    X_test_processed  = preprocessor.transform(X_test)
+        out_cols = num_features + cat_features
+        X_train_proc_df = pd.DataFrame(X_train_processed, columns=out_cols, index=X_train.index)
+        X_test_proc_df  = pd.DataFrame(X_test_processed,  columns=out_cols, index=X_test.index)
 
-    # 6) Reconstruye DataFrames con los mismos nombres (porque no hicimos one-hot)
-    out_cols = num_features + cat_features
-    import pandas as pd
-    X_train_proc_df = pd.DataFrame(X_train_processed, columns=out_cols, index=X_train.index)
-    X_test_proc_df  = pd.DataFrame(X_test_processed,  columns=out_cols, index=X_test.index)
+        st.success(f"Preprocesamiento OK · X_train_proc: {X_train_proc_df.shape} · X_test_proc: {X_test_proc_df.shape}")
 
-    st.success(f"Preprocesamiento OK · X_train_proc: {X_train_proc_df.shape} · X_test_proc: {X_test_proc_df.shape}")
-
-    st.session_state["preprocessor"] = preprocessor
-    st.session_state["X_train_processed"] = X_train_proc_df
-    st.session_state["X_test_processed"]  = X_test_proc_df
+        st.session_state["preprocessor"] = preprocessor
+        st.session_state["X_train_processed"] = X_train_proc_df
+        st.session_state["X_test_processed"]  = X_test_proc_df
 
 
 
